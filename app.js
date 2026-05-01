@@ -4,12 +4,16 @@ const STORAGE_KEYS = {
   geoCache: "sahne_geo_cache_v4",
   roadCache: "sahne_road_cache_v4",
   settings: "sahne_settings_v1",
+  tourSeedId: "sahne_tour_seed_id_v1",
 };
 
 const DAILY_KM_LIMIT = 800;
 const DEFAULT_FUEL_PRICE = 70;
 const FUEL_LITER_PER_100KM = 11;
-const DEFAULT_TEAMS = ["Baris", "Barkin", "Diger"];
+
+const TOUR_SEED_VERSION = "2026-turu-v1";
+
+const DEFAULT_TEAMS = ["Barış", "Barkın", "Diğer"];
 const IZMIR = "Izmir";
 const TURKIYE_SEHIRLERI = [
   "Adana", "Adiyaman", "Afyonkarahisar", "Agri", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydin",
@@ -22,6 +26,68 @@ const TURKIYE_SEHIRLERI = [
 ];
 
 const citySet = new Set(TURKIYE_SEHIRLERI.map((x) => x.toLowerCase()));
+
+const TOUR_ROW_DATA = [
+  ["24.04.2026", "Diğer", "Aziz Vukolos", "Izmir"],
+  ["24.04.2026", "Barış", "BAOB Bursa", "Bursa"],
+  ["25.04.2026", "Barış", "Vehbi Koç Kongre Merkezi", "Eskisehir"],
+  ["26.04.2026", "Barış", "Nurol Kültür Merkezi", "Mugla"],
+  ["02.05.2026", "Barış", "Leyla Dizdar Kültür Merkezi", "Karabuk"],
+  ["05.05.2026", "Diğer", "Aziz Vukolos", "Izmir"],
+  ["05.05.2026", "Barış", "Şahinbey Kongre ve Sanat Merkezi", "Gaziantep"],
+  ["06.05.2026", "Diğer", "ÇOMÜ İçdaş Kongre Merkezi", "Canakkale"],
+  ["08.05.2026", "Diğer", "Aziz Vukolos", "Izmir"],
+  ["09.05.2026", "Barış", "Karadeniz Teknik Üniversitesi AKM Salonu", "Trabzon"],
+  ["10.05.2026", "Barış", "Nihat Gökyiğit Kongre ve Kültür Merkezi", "Artvin"],
+  ["12.05.2026", "Diğer", "Herodot Kültür Merkezi", "Mugla"],
+  ["12.05.2026", "Barış", "Kültür Merkezi", "Burdur"],
+  ["13.05.2026", "Barış", "Kültürpark Açıkhava Tiyatrosu", "Izmir"],
+  ["14.05.2026", "Barış", "Kadir Has Kongre ve Kültür Merkezi", "Kayseri"],
+  ["14.05.2026", "Diğer", "Adnan Saygun", "Izmir"],
+  ["16.05.2026", "Barış", "Yahya Kemal Beyatlı Kültür Merkezi", "Tekirdag"],
+  ["16.05.2026", "Diğer", "St. John Anglikan Klisesi", "Izmir"],
+  ["19.05.2026", "Barış", "Necip Fazıl Kısakürek Kültür Merkezi", "Erzurum"],
+  ["20.05.2026", "Barış", "Kültür Sanat Merkezi", "Ordu"],
+  ["20.05.2026", "Diğer", "Hezar Dinari Kültür Merkezi", "Kutahya"],
+  ["21.05.2026", "Barış", "Samsun Büyükşehir Belediyesi Sanat Merkezi", "Samsun"],
+  ["22.05.2026", "Diğer", "Aziz Vukolos", "Izmir"],
+  ["23.05.2026", "Barış", "Muhsin Yazıcıoğlu Kültür Merkezi", "Sivas"],
+  ["24.05.2026", "Diğer", "Aziz Vukolos", "Izmir"],
+  ["25.05.2026", "Diğer", "Aziz Vukolos", "Izmir"],
+  ["25.05.2026", "Barış", "Necip Fazıl Kısakürek Kültür Merkezi", "Bolu"],
+  ["03.06.2026", "Barış", "Mersin Yenişehir AKM Cumhuriyet Salonu", "Mersin"],
+  ["05.06.2026", "Barış", "Orpheus Açıkhava", "Sanliurfa"],
+  ["06.06.2026", "Barış", "Sıtkı Koçman Üniversitesi", "Mugla"],
+  ["08.06.2026", "Barış", "Derince Belediyesi Gösteri Merkezi", "Kocaeli"],
+  ["09.06.2026", "Barış", "Çomü İçdaş Kongre Merkezi", "Canakkale"],
+  ["10.06.2026", "Barış", "Girne Koleji", "Afyonkarahisar"],
+  ["12.06.2026", "Barış", "Açıkhava Adana", "Adana"],
+  ["13.06.2026", "Barış", "Wyndham", "Ankara"],
+  ["14.06.2026", "Barış", "Ktü Akm Salonu", "Trabzon"],
+  ["15.06.2026", "Diğer", "Açıkhava", "Antalya"],
+  ["15.06.2026", "Barış", "Samsun Büyükşehir Belediyesi Sanat Merkezi", "Samsun"],
+  ["16.06.2026", "Diğer", "Açıkhava Tiyatrosu", "Antalya"],
+  ["17.06.2026", "Barış", "01 PGM", "Adana"],
+  ["18.06.2026", "Barış", "Avlu Kültür ve Kongre Merkezi", "Balikesir"],
+  ["19.06.2026", "Barış", "Armutalan Kültür Merkezi", "Mugla"],
+  ["20.06.2026", "Barış", "Kırkpınar Amfi Tiyatro", "Sakarya"],
+  ["21.06.2026", "Barış", "Tarihi Havagazı Fabrikası", "Izmir"],
+  ["22.06.2026", "Barış", "Nihat Zeybekçi Kongre Ve Kültür Merkezi Fatma Yıldız Salonu", "Denizli"],
+  ["24.06.2026", "Diğer", "Adnan Saygun", "Izmir"],
+  ["24.06.2026", "Barış", "Tayyare Kültür Merkezi", "Bursa"],
+  ["27.06.2026", "Diğer", "Dam", "Izmir"],
+  ["27.06.2026", "Barış", "Kırkpınar Amfi Tiyatro", "Sakarya"],
+  ["28.06.2026", "Barış", "Giresun Belediyesi Fuar Kültür Merkezi", "Giresun"],
+  ["29.06.2026", "Barış", "Amasya Belediyesi Kültür Merkezi Şehzade Salonu", "Amasya"],
+  ["30.06.2026", "Barış", "Sezai Karakoç Kültür Merkezi", "Diyarbakir"],
+  ["30.06.2026", "Diğer", "Neşet Ertaş Kültür Merkezi Muharrem Ertaş Salonu", "Kirsehir"],
+  ["01.07.2026", "Diğer", "Aziz Vukolos Klisesi", "Izmir"],
+  ["06.07.2026", "Barış", "Oran Açıkhava", "Ankara"],
+  ["07.07.2026", "Barış", "Büyük Sinema Kültür Merkezi", "Yozgat"],
+  ["08.07.2026", "Barış", "Akm", "Tokat"],
+  ["25.09.2026", "Barış", "Ferdi Zeyrek Millet Çarşısı", "Manisa"],
+];
+
 const state = {
   teams: [],
   events: [],
@@ -57,11 +123,12 @@ const els = {
   tableTeamFilters: document.getElementById("table-team-filters"),
 };
 
-function bootstrap() {
+async function bootstrap() {
   loadFromStorage();
   bindEvents();
   fillCitiesDatalist();
   renderAll();
+  await recalculateAllValidations();
 }
 
 function bindEvents() {
@@ -76,6 +143,52 @@ function bindEvents() {
   els.revalidateBtn.addEventListener("click", revalidateAllRows);
 }
 
+function ddmmyyyyToIso(s) {
+  const p = s.split(".");
+  if (p.length !== 3) return s;
+  const [dd, mm, yyyy] = p.map((x) => x.trim());
+  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+}
+
+function createTourSeedEvents() {
+  return TOUR_ROW_DATA.map((row, i) => {
+    const [dmy, team, venue, canonIl] = row;
+    if (!citySet.has(canonIl.toLowerCase())) {
+      console.warn("Tanimsiz il (seed):", canonIl, row);
+    }
+    return {
+      id: `tur-${String(i + 1).padStart(3, "0")}`,
+      date: ddmmyyyyToIso(dmy),
+      team,
+      venue: normalizeText(venue),
+      destination: canonIl,
+      returnToIzmir: false,
+      fuelPricePerLiter: DEFAULT_FUEL_PRICE,
+      startCity: IZMIR,
+      avgKm: null,
+      validation: null,
+      fuelLiterUsed: null,
+      fuelCost: null,
+      adviceText: "",
+    };
+  });
+}
+
+function applyTourSeedIfNeeded() {
+  try {
+    if (localStorage.getItem(STORAGE_KEYS.tourSeedId) === TOUR_SEED_VERSION) return false;
+    state.events = createTourSeedEvents();
+    state.teams = [...DEFAULT_TEAMS];
+    saveEvents();
+    saveTeams();
+    localStorage.setItem(STORAGE_KEYS.tourSeedId, TOUR_SEED_VERSION);
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
 function loadFromStorage() {
   state.teams = loadJSON(STORAGE_KEYS.teams, DEFAULT_TEAMS.slice());
   state.events = loadJSON(STORAGE_KEYS.events, []);
@@ -83,6 +196,7 @@ function loadFromStorage() {
   state.roadCache = loadJSON(STORAGE_KEYS.roadCache, {});
   const settings = loadJSON(STORAGE_KEYS.settings, { defaultFuelPrice: DEFAULT_FUEL_PRICE });
   state.defaultFuelPrice = toPositiveNumber(settings.defaultFuelPrice, DEFAULT_FUEL_PRICE);
+  applyTourSeedIfNeeded();
 }
 
 function loadJSON(key, fallback) {
@@ -146,7 +260,7 @@ function renderTeams() {
 
 function renderTeamButtons() {
   if (!state.selectedTeam || !state.teams.includes(state.selectedTeam)) {
-    state.selectedTeam = state.teams.includes("Baris") ? "Baris" : (state.teams[0] || "");
+    state.selectedTeam = state.teams.includes("Barış") ? "Barış" : state.teams[0] || "";
   }
   els.eventTeamValue.value = state.selectedTeam;
   els.eventTeamButtons.innerHTML = "";
@@ -368,21 +482,21 @@ function renderEvents() {
   for (const event of filtered) {
     const tr = document.createElement("tr");
 
-    const teamTd = document.createElement("td");
-    teamTd.appendChild(createTeamSelect(event.team, (e) => updateEventField(event.id, "team", e.target.value)));
-    tr.appendChild(teamTd);
-
     const dateTd = document.createElement("td");
     dateTd.appendChild(createDateInput(event.date, (e) => updateEventField(event.id, "date", e.target.value)));
     tr.appendChild(dateTd);
 
-    const ilTd = document.createElement("td");
-    ilTd.appendChild(createCityInput(event.destination, (e) => updateEventField(event.id, "destination", normalizeCityName(e.target.value))));
-    tr.appendChild(ilTd);
+    const teamTd = document.createElement("td");
+    teamTd.appendChild(createTeamSelect(event.team, (e) => updateEventField(event.id, "team", e.target.value)));
+    tr.appendChild(teamTd);
 
     const venueTd = document.createElement("td");
     venueTd.appendChild(createTextInput(event.venue, (e) => updateEventField(event.id, "venue", normalizeText(e.target.value))));
     tr.appendChild(venueTd);
+
+    const ilTd = document.createElement("td");
+    ilTd.appendChild(createCityInput(event.destination, (e) => updateEventField(event.id, "destination", normalizeCityName(e.target.value))));
+    tr.appendChild(ilTd);
 
     const startTd = document.createElement("td");
     startTd.textContent = event.startCity || IZMIR;
@@ -743,4 +857,4 @@ function debounce(fn, waitMs) {
   };
 }
 
-bootstrap();
+bootstrap().catch((err) => console.error(err));
