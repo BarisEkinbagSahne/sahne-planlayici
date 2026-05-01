@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sahne Lojistik Planlayici</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Sahne Lojistik Planlayici</h1>
+        <p>Karayolu mesafesi ve 800 km/gun kuralina gore ekip planlama</p>
+      </div>
+      <button id="settings-toggle-btn" class="icon-btn" type="button" aria-label="Ayarlar">☰</button>
+    </header>
+
+    <aside id="settings-panel" class="settings-panel hidden">
+      <div class="settings-header">
+        <h2>Ayarlar</h2>
+        <button id="settings-close-btn" class="ghost" type="button">Kapat</button>
+      </div>
+      <section class="card nested">
+        <h3>Ekip Yonetimi</h3>
+        <form id="team-form" class="inline-form">
+          <input id="team-name-input" type="text" placeholder="Yeni ekip adi" required />
+          <button type="submit">Ekip Ekle</button>
+        </form>
+        <ul id="team-list" class="team-list"></ul>
+        <label>
+          Varsayilan Mazot Fiyati (TL/Litre)
+          <input id="default-fuel-price-input" type="number" min="0" step="0.01" />
+        </label>
+      </section>
+    </aside>
+
+    <main class="layout">
+      <section class="card card-wide">
+        <h2>Etkinlik Ekle</h2>
+        <form id="event-form" class="event-form-row">
+          <div>
+            <div class="team-buttons-title">Ekip</div>
+            <div id="event-team-buttons" class="team-buttons"></div>
+            <input id="event-team-value" type="hidden" required />
+          </div>
+          <label>
+            Tarih
+            <input id="event-date" type="date" required />
+          </label>
+          <label>
+            Il
+            <input id="event-destination" type="text" list="cities-list" placeholder="Orn: Izmir" required />
+          </label>
+          <label>
+            Gidilecek Yer (Mekan)
+            <input id="event-venue" type="text" placeholder="Orn: Ataturk Kultur Merkezi" required />
+          </label>
+          <button type="button" id="event-return-btn" class="ghost hidden">Izmir Donus: Hayir</button>
+          <button type="submit" id="submit-btn">Kaydet</button>
+        </form>
+        <div id="validation-box" class="validation info">Canli kontrol icin veri girin.</div>
+      </section>
+
+      <section class="card card-wide">
+        <div class="table-header">
+          <h2>Etkinlikler</h2>
+          <button id="revalidate-btn" class="ghost">Tum verilerde Km tekrar hesapla</button>
+        </div>
+        <div class="filter-row">
+          <span>Ekip Filtresi:</span>
+          <div id="table-team-filters" class="team-buttons"></div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Ekip</th>
+                <th>Tarih</th>
+                <th>Il</th>
+                <th>Gidilecek Yer</th>
+                <th>Baslangic (Otomatik)</th>
+                <th>Izmir Donus</th>
+                <th>Ortalama Km</th>
+                <th>Mazot/Litre</th>
+                <th>Mazot Fiyat</th>
+                <th>Mazot Maliyet</th>
+                <th>Durum</th>
+                <th>Detay</th>
+                <th>Islem</th>
+              </tr>
+            </thead>
+            <tbody id="event-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <datalist id="cities-list"></datalist>
+
+    <template id="team-item-template">
+      <li>
+        <span class="team-name"></span>
+        <button class="danger delete-team-btn" type="button">Sil</button>
+      </li>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
