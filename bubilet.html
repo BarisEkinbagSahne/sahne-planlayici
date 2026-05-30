@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bubilet Kontrol - Sahne Lojistik</title>
+    <script>
+      if (location.hostname.includes("github.io")) {
+        var live = "https://sahne-lojistik.onrender.com";
+        var path = location.pathname.replace(/^\/sahne-planlayici/, "") || "/bubilet.html";
+        location.replace(live + path + location.search + location.hash);
+      }
+    </script>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
