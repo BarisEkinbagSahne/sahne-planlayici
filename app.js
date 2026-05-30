@@ -73,8 +73,27 @@ async function bootstrap() {
   } catch (err) {
     console.error(err);
     setSyncStatus(`Sunucu baglantisi yok: ${err.message}`, "error");
-    alert("Sunucuya baglanilamadi. Lutfen 'npm start' ile sunucuyu calistirin.");
+    alert(getServerHelpMessage());
   }
+}
+
+function getServerHelpMessage() {
+  const host = window.location.hostname;
+  if (host.includes("github.io") || host.includes("github.dev")) {
+    return (
+      "Bu adres (GitHub Pages) sadece sayfa dosyalarini gosterir; Bubilet ve ortak veri icin sunucu gerekir.\n\n" +
+      "Yapmaniz gereken:\n" +
+      "1) render.com adresine gidin (ucretsiz hesap acin)\n" +
+      "2) GitHub reposunu baglayin: BarisEkinbagSahne/sahne-planlayici\n" +
+      "3) Deploy edin - Render size bir link verir (ornek: sahne-xxxx.onrender.com)\n" +
+      "4) Telefon ve bilgisayardan o linke girin\n\n" +
+      "GitHub Pages linki bu uygulama icin yeterli degildir."
+    );
+  }
+  if (host === "localhost" || host === "127.0.0.1") {
+    return "Sunucu calismiyor. Proje klasorunde terminal acip su komutu calistirin:\n\nnpm start\n\nSonra tarayicida http://localhost:3000 adresine gidin.";
+  }
+  return "Sunucuya baglanilamadi. Site yoneticisinin sunucuyu (Render vb.) calistirdigindan emin olun.";
 }
 
 function bindEvents() {
@@ -276,7 +295,7 @@ function deleteTeam(team) {
 
 function getFormPayload() {
   const team = state.selectedTeam || els.eventTeamValue.value;
-  const date = els.eventDate.value;
+  const date = SahneDates.displayToIso(els.eventDate.value);
   const destination = normalizeCityName(els.eventDestination.value);
   const venue = normalizeText(els.eventVenue.value);
   const returnToIzmir = state.returnToIzmirDraft;
@@ -355,10 +374,21 @@ function createTeamSelect(value, onChange) {
 
 function createDateInput(value, onChange) {
   const input = document.createElement("input");
-  input.className = "cell-input";
-  input.type = "date";
-  input.value = value;
-  input.addEventListener("change", onChange);
+  input.className = "cell-input date-input";
+  input.type = "text";
+  input.inputMode = "numeric";
+  input.placeholder = "GG.AA.YYYY";
+  input.value = SahneDates.isoToDisplay(value);
+  input.addEventListener("change", (e) => {
+    const iso = SahneDates.displayToIso(e.target.value);
+    if (!iso) {
+      alert("Tarih formati GG.AA.YYYY olmali. Ornek: 01.06.2026");
+      e.target.value = SahneDates.isoToDisplay(value);
+      return;
+    }
+    e.target.value = SahneDates.isoToDisplay(iso);
+    onChange({ target: { value: iso } });
+  });
   return input;
 }
 
@@ -712,28 +742,31 @@ async function geocodeCity(city) {
 }
 
 function findClosestBefore(items, date) {
-  const t = new Date(date).getTime();
+  const t = SahneDates.parseIsoLocal(date).getTime();
   let best = null;
   items.forEach((it) => {
-    const val = new Date(it.date).getTime();
-    if (val < t && (!best || val > new Date(best.date).getTime())) best = it;
+    const val = SahneDates.parseIsoLocal(it.date).getTime();
+    if (val < t && (!best || val > SahneDates.parseIsoLocal(best.date).getTime())) best = it;
   });
   return best;
 }
 
 function findClosestAfter(items, date) {
-  const t = new Date(date).getTime();
+  const t = SahneDates.parseIsoLocal(date).getTime();
   let best = null;
   items.forEach((it) => {
-    const val = new Date(it.date).getTime();
-    if (val > t && (!best || val < new Date(best.date).getTime())) best = it;
+    const val = SahneDates.parseIsoLocal(it.date).getTime();
+    if (val > t && (!best || val < SahneDates.parseIsoLocal(best.date).getTime())) best = it;
   });
   return best;
 }
 
 function daysBetween(a, b) {
-  const ms = new Date(b).setHours(0, 0, 0, 0) - new Date(a).setHours(0, 0, 0, 0);
-  return Math.round(ms / 86400000);
+  const da = SahneDates.parseIsoLocal(a);
+  const db = SahneDates.parseIsoLocal(b);
+  da.setHours(0, 0, 0, 0);
+  db.setHours(0, 0, 0, 0);
+  return Math.round((db.getTime() - da.getTime()) / 86400000);
 }
 
 function sortByDateThenId(a, b) {
@@ -779,14 +812,7 @@ function isKnownCity(city) {
 }
 
 function isSameDay(a, b) {
-  const da = new Date(a);
-  const db = new Date(b);
-  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false;
-  return (
-    da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate()
-  );
+  return a === b;
 }
 
 function debounce(fn, waitMs) {

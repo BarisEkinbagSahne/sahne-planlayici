@@ -43,6 +43,13 @@ export function mapBubiletCity(cityName) {
   return cityLookup.get(key) || null;
 }
 
+function sessionDateToIso(sessionDate) {
+  if (!sessionDate) return "";
+  const dt = new Date(sessionDate);
+  if (Number.isNaN(dt.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(dt);
+}
+
 function extractSessions(text) {
   const sessions = [];
   const patterns = [
@@ -70,11 +77,12 @@ function extractSessions(text) {
 function uniqueSessions(sessions) {
   const map = new Map();
   for (const session of sessions) {
-    const date = session.sessionDate.slice(0, 10);
+    const date = sessionDateToIso(session.sessionDate);
+    if (!date) continue;
     const key = `${date}|${session.venueName}|${session.cityName}`;
-    if (!map.has(key)) map.set(key, session);
+    if (!map.has(key)) map.set(key, { ...session, localDate: date });
   }
-  return [...map.values()].sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+  return [...map.values()].sort((a, b) => a.localDate.localeCompare(b.localDate));
 }
 
 export async function fetchBubiletSessions(url = BUBILET_ARTIST_URL) {
@@ -104,7 +112,10 @@ export function bubiletSessionToEvent(session, options = {}) {
     return { ok: false, reason: `Tanimsiz il: ${session.cityName}`, session };
   }
 
-  const date = session.sessionDate.slice(0, 10);
+  const date = sessionDateToIso(session.sessionDate);
+  if (!date) {
+    return { ok: false, reason: "Gecersiz tarih", session };
+  }
   return {
     ok: true,
     event: {

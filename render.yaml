@@ -3,8 +3,10 @@ services:
     name: sahne-lojistik
     runtime: node
     plan: free
+    region: frankfurt
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/data
     envVars:
       - key: NODE_VERSION
         value: 20

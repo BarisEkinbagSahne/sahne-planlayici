@@ -40,8 +40,8 @@
         <h2>Etkinlik Ekle</h2>
         <form id="event-form" class="event-form-row">
           <label>
-            Tarih
-            <input id="event-date" type="date" required />
+            Tarih (GG.AA.YYYY)
+            <input id="event-date" type="text" inputmode="numeric" placeholder="01.06.2026" required />
           </label>
           <div>
             <div class="team-buttons-title">Ekip</div>
@@ -108,6 +108,7 @@
       </li>
     </template>
 
+    <script src="dates.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

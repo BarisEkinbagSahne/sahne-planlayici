@@ -35,8 +35,7 @@ function setSummary(message, level = "info") {
 }
 
 function formatDate(isoDate) {
-  const [yyyy, mm, dd] = isoDate.split("-");
-  return `${dd}.${mm}.${yyyy}`;
+  return SahneDates.isoToDisplay(isoDate);
 }
 
 function renderMissingRows(items) {

@@ -345,6 +345,12 @@ td {
   padding: 7px;
 }
 
+.date-input {
+  min-width: 108px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 @media (max-width: 1050px) {
   .event-form-row {
     grid-template-columns: repeat(3, minmax(140px, 1fr));
