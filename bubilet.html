@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bubilet Kontrol - Sahne Lojistik</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Bubilet Kontrol</h1>
+        <p>Bubilet'te olup tablomuzda olmayan konserleri bulun ve ekleyin</p>
+        <p id="sync-status" class="sync-status sync-info">Hazir</p>
+      </div>
+      <a href="index.html" class="ghost header-link">Ana Sayfa</a>
+    </header>
+
+    <main class="layout">
+      <section class="card card-wide">
+        <h2>Bubilet Linki</h2>
+        <div class="bubilet-form">
+          <label class="full-width">
+            Sanatci sayfasi linki
+            <input id="bubilet-url-input" type="url" placeholder="https://www.bubilet.com.tr/sanatci/..." />
+          </label>
+          <button id="bubilet-check-btn" type="button">Kontrol et</button>
+        </div>
+        <div id="bubilet-summary" class="validation info">Linki girip Kontrol et'e basin.</div>
+      </section>
+
+      <section class="card card-wide">
+        <div class="table-header">
+          <h2>Eksik Konserler</h2>
+          <span id="missing-count" class="missing-count">0 kayit</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Tarih</th>
+                <th>Mekan</th>
+                <th>Il</th>
+                <th>Ekip (Varsayilan)</th>
+              </tr>
+            </thead>
+            <tbody id="missing-tbody">
+              <tr>
+                <td colspan="4" class="empty-cell">Henuz kontrol yapilmadi.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="bubilet-actions">
+          <button id="bubilet-add-btn" type="button" disabled>Olmayanlari ekle ve km hesapla</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="bubilet.js"></script>
+  </body>
+</html>

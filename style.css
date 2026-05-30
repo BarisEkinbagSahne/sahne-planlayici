@@ -272,6 +272,30 @@ td {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sync-status {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+}
+
+.sync-info {
+  opacity: 0.9;
+}
+
+.sync-ok {
+  color: #c8f7c5;
+}
+
+.sync-error {
+  color: #ffd0d0;
 }
 
 .icon-btn {
@@ -330,5 +354,60 @@ td {
 @media (max-width: 720px) {
   .event-form-row {
     grid-template-columns: repeat(1, minmax(140px, 1fr));
+  }
+}
+
+.btn-link,
+.header-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #c8d3ea;
+  background: #fff;
+  color: #1d2430;
+  font-size: 0.9rem;
+}
+
+.header-link {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.bubilet-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.bubilet-form .full-width {
+  display: grid;
+  gap: 4px;
+}
+
+.bubilet-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.missing-count {
+  font-size: 0.9rem;
+  color: #5a6478;
+}
+
+.empty-cell {
+  text-align: center;
+  color: #5a6478;
+  padding: 18px;
+}
+
+@media (max-width: 720px) {
+  .bubilet-form {
+    grid-template-columns: 1fr;
   }
 }
