@@ -2,8 +2,11 @@ const DAILY_KM_LIMIT = 800;
 const DEFAULT_FUEL_PRICE = 70;
 const FUEL_LITER_PER_100KM = 11;
 const UNASSIGNED_TEAM = "Boş";
-const GRID_DAYS = 7;
 const GRID_SUB_ROWS = 4;
+const GRID_INITIAL_BEFORE = 7;
+const GRID_INITIAL_AFTER = 28;
+const GRID_EXPAND_DAYS = 14;
+const GRID_EDGE_THRESHOLD = 160;
 
 const API_BASE = "";
 
@@ -29,7 +32,9 @@ const state = {
   returnToIzmirDraft: false,
   teamFilter: "ALL",
   eventView: "grid",
-  gridWeekOffset: 0,
+  gridStartDate: null,
+  gridEndDate: null,
+  gridDidInitialScroll: false,
   defaultFuelPrice: DEFAULT_FUEL_PRICE,
   bubiletUrl: "",
 };
@@ -57,8 +62,6 @@ const els = {
   bosPool: document.getElementById("bos-pool"),
   scheduleGrid: document.getElementById("schedule-grid"),
   gridRangeLabel: document.getElementById("grid-range-label"),
-  gridPrevBtn: document.getElementById("grid-prev-btn"),
-  gridNextBtn: document.getElementById("grid-next-btn"),
   teamItemTemplate: document.getElementById("team-item-template"),
   revalidateBtn: document.getElementById("revalidate-btn"),
   syncStatus: document.getElementById("sync-status"),
@@ -74,6 +77,15 @@ async function bootstrap() {
     fillCitiesDatalist();
     renderAll();
     setSyncStatus("Sunucu ile senkron", "ok");
+
+    if (state.events.some((e) => isAssignedTeam(e.team))) {
+      recalculateTravelLegs()
+        .then(() => {
+          saveCaches();
+          renderEventsView();
+        })
+        .catch(() => {});
+    }
 
     if (new URLSearchParams(window.location.search).get("recalculate") === "1") {
       window.history.replaceState(null, "", "index.html");
@@ -119,8 +131,7 @@ function bindEvents() {
   els.revalidateBtn.addEventListener("click", revalidateAllRows);
   els.viewTableBtn.addEventListener("click", () => setEventView("table"));
   els.viewGridBtn.addEventListener("click", () => setEventView("grid"));
-  els.gridPrevBtn.addEventListener("click", () => shiftGridWeek(-1));
-  els.gridNextBtn.addEventListener("click", () => shiftGridWeek(1));
+  setupGridPanScroll();
   setupDragDropRoot();
 }
 
@@ -206,6 +217,9 @@ function renderAll() {
 
 function setEventView(view) {
   state.eventView = view === "table" ? "table" : "grid";
+  if (state.eventView === "grid") {
+    state.gridDidInitialScroll = false;
+  }
   renderEventsView();
 }
 
@@ -220,11 +234,6 @@ function renderEventsView() {
   } else {
     renderEvents();
   }
-}
-
-function shiftGridWeek(delta) {
-  state.gridWeekOffset += delta;
-  renderEventGrid();
 }
 
 function renderSettings() {
@@ -633,6 +642,8 @@ async function recalculateAllValidations() {
     item.adviceText = await getReturnAdviceText(item);
   }
 
+  await recalculateTravelLegs();
+
   await persistState();
   renderEventsView();
   runLiveValidation();
@@ -881,30 +892,225 @@ function addDaysToIso(iso, days) {
   return isoFromDate(d);
 }
 
-function getGridWeekStart() {
-  const assignedDates = state.events
-    .filter((e) => isAssignedTeam(e.team) && e.date)
-    .map((e) => e.date)
-    .sort();
-  const unassignedDates = state.events
-    .filter((e) => isUnassignedTeam(e.team) && e.date)
-    .map((e) => e.date)
-    .sort();
-  const allDates = [...assignedDates, ...unassignedDates];
-  let base = allDates.length ? allDates[0] : isoFromDate(new Date());
-  if (state.gridWeekOffset !== 0) {
-    base = addDaysToIso(base, state.gridWeekOffset * GRID_DAYS);
+function getTodayIso() {
+  return isoFromDate(new Date());
+}
+
+function initGridRange() {
+  if (state.gridStartDate && state.gridEndDate) return;
+  const today = getTodayIso();
+  state.gridStartDate = addDaysToIso(today, -GRID_INITIAL_BEFORE);
+  state.gridEndDate = addDaysToIso(today, GRID_INITIAL_AFTER);
+}
+
+function ensureDateInGridRange(isoDate) {
+  initGridRange();
+  if (!isoDate) return;
+  while (isoDate < state.gridStartDate) {
+    state.gridStartDate = addDaysToIso(state.gridStartDate, -GRID_EXPAND_DAYS);
   }
-  return base;
+  while (isoDate > state.gridEndDate) {
+    state.gridEndDate = addDaysToIso(state.gridEndDate, GRID_EXPAND_DAYS);
+  }
 }
 
 function getGridDates() {
-  const start = getGridWeekStart();
+  initGridRange();
   const dates = [];
-  for (let i = 0; i < GRID_DAYS; i += 1) {
-    dates.push(addDaysToIso(start, i));
+  let cur = state.gridStartDate;
+  while (cur <= state.gridEndDate) {
+    dates.push(cur);
+    cur = addDaysToIso(cur, 1);
   }
   return dates;
+}
+
+function measureGridDayWidth() {
+  const cell = els.scheduleGrid.querySelector("[data-grid-date]");
+  if (!cell) return 252;
+  const kmCell = cell.nextElementSibling;
+  return cell.offsetWidth + (kmCell?.offsetWidth || 0);
+}
+
+function updateGridRangeLabel() {
+  const wrapper = els.scheduleGrid;
+  const headers = [...wrapper.querySelectorAll(".date-header")];
+  if (!headers.length) return;
+  const viewLeft = wrapper.scrollLeft;
+  const viewRight = viewLeft + wrapper.clientWidth;
+  let first = null;
+  let last = null;
+  headers.forEach((h) => {
+    const left = h.offsetLeft;
+    const right = left + h.offsetWidth;
+    if (right > viewLeft && left < viewRight) {
+      if (!first) first = h.dataset.gridDate;
+      last = h.dataset.gridDate;
+    }
+  });
+  if (first && last) {
+    els.gridRangeLabel.textContent = `${SahneDates.isoToDisplay(first)} – ${SahneDates.isoToDisplay(last)}`;
+  }
+}
+
+function scrollGridToDate(isoDate) {
+  if (!isoDate) return;
+  ensureDateInGridRange(isoDate);
+  requestAnimationFrame(() => {
+    const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
+    const target = inner?.querySelector(`[data-grid-date="${isoDate}"]`);
+    if (!target) return;
+    const wrapper = els.scheduleGrid;
+    const dayWidth = measureGridDayWidth();
+    wrapper.scrollLeft = target.offsetLeft - (wrapper.clientWidth - dayWidth) / 2;
+    updateGridRangeLabel();
+    renderTravelArrows();
+  });
+}
+
+let gridExpanding = false;
+
+function onGridScrollEdge() {
+  if (gridExpanding) return;
+  const wrapper = els.scheduleGrid;
+  const edge = GRID_EDGE_THRESHOLD;
+  const dayWidth = measureGridDayWidth();
+
+  if (wrapper.scrollLeft < edge) {
+    gridExpanding = true;
+    const prevScroll = wrapper.scrollLeft;
+    state.gridStartDate = addDaysToIso(state.gridStartDate, -GRID_EXPAND_DAYS);
+    renderEventGrid({ preserveScroll: true, scrollAdjust: GRID_EXPAND_DAYS * dayWidth, prevScroll });
+    gridExpanding = false;
+    return;
+  }
+
+  if (wrapper.scrollLeft + wrapper.clientWidth > wrapper.scrollWidth - edge) {
+    gridExpanding = true;
+    state.gridEndDate = addDaysToIso(state.gridEndDate, GRID_EXPAND_DAYS);
+    renderEventGrid({ preserveScroll: true, prevScroll: wrapper.scrollLeft });
+    gridExpanding = false;
+  }
+}
+
+let gridPanBound = false;
+
+function setupGridPanScroll() {
+  if (gridPanBound) return;
+  gridPanBound = true;
+  const el = els.scheduleGrid;
+  let panning = false;
+  let startX = 0;
+  let startScroll = 0;
+
+  el.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest(".grid-event-block, .event-card, button, select, input")) return;
+    panning = true;
+    startX = e.pageX;
+    startScroll = el.scrollLeft;
+    el.classList.add("is-panning");
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!panning) return;
+    el.scrollLeft = startScroll - (e.pageX - startX);
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!panning) return;
+    panning = false;
+    el.classList.remove("is-panning");
+  });
+
+  el.addEventListener("touchstart", (e) => {
+    if (e.target.closest(".grid-event-block, .event-card, button")) return;
+    if (e.touches.length !== 1) return;
+    panning = true;
+    startX = e.touches[0].pageX;
+    startScroll = el.scrollLeft;
+  }, { passive: true });
+
+  el.addEventListener("touchmove", (e) => {
+    if (!panning || e.touches.length !== 1) return;
+    el.scrollLeft = startScroll - (e.touches[0].pageX - startX);
+  }, { passive: true });
+
+  el.addEventListener("touchend", () => {
+    panning = false;
+  });
+
+  el.addEventListener("scroll", debounce(() => {
+    updateGridRangeLabel();
+    renderTravelArrows();
+    onGridScrollEdge();
+  }, 80));
+}
+
+async function recalculateTravelLegs() {
+  state.events.forEach((item) => {
+    item.travelKmFromPrev = null;
+  });
+
+  for (const team of state.teams) {
+    const teamEvents = state.events
+      .filter((ev) => ev.team === team && isAssignedTeam(ev.team))
+      .sort(sortByDateThenId);
+
+    for (let i = 1; i < teamEvents.length; i += 1) {
+      const prev = teamEvents[i - 1];
+      const curr = teamEvents[i];
+      try {
+        const from = getEventEndCity(prev);
+        const to = getStartCityForCandidate(curr, curr.id);
+        curr.travelKmFromPrev = await getRoadDistanceKm(from, to);
+      } catch {
+        curr.travelKmFromPrev = null;
+      }
+    }
+  }
+}
+
+function renderTravelArrows() {
+  const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
+  const overlay = inner?.querySelector(".grid-connectors");
+  if (!inner || !overlay) return;
+
+  overlay.innerHTML = "";
+  const teams = getFilteredTeams();
+  const innerRect = inner.getBoundingClientRect();
+
+  teams.forEach((team) => {
+    const teamEvents = state.events
+      .filter((ev) => ev.team === team && isAssignedTeam(ev.team))
+      .sort(sortByDateThenId);
+
+    for (let i = 1; i < teamEvents.length; i += 1) {
+      const prev = teamEvents[i - 1];
+      const curr = teamEvents[i];
+      if (curr.travelKmFromPrev == null) continue;
+
+      const prevCell = inner.querySelector(`[data-grid-team="${team}"][data-grid-date="${prev.date}"]`);
+      const currCell = inner.querySelector(`[data-grid-team="${team}"][data-grid-date="${curr.date}"]`);
+      if (!prevCell || !currCell) continue;
+
+      const pr = prevCell.getBoundingClientRect();
+      const cr = currCell.getBoundingClientRect();
+      const x1 = pr.right - innerRect.left;
+      const x2 = cr.left - innerRect.left;
+      const y = (pr.top + pr.bottom) / 2 - innerRect.top;
+
+      if (x2 <= x1 + 8) continue;
+
+      const conn = document.createElement("div");
+      conn.className = "travel-connector";
+      conn.style.left = `${x1}px`;
+      conn.style.top = `${y - 16}px`;
+      conn.style.width = `${x2 - x1}px`;
+      conn.innerHTML = `<span class="travel-arrow-line"></span><span class="travel-arrow-label">Gidilen Km<br><strong>${Math.round(curr.travelKmFromPrev)} km</strong></span>`;
+      overlay.appendChild(conn);
+    }
+  });
 }
 
 function getFilteredTeams() {
@@ -966,18 +1172,11 @@ function bindDropZone(el, team) {
 }
 
 function getGridAnchorDate() {
-  const allDates = state.events
-    .map((e) => e.date)
-    .filter(Boolean)
-    .sort();
-  return allDates.length ? allDates[0] : isoFromDate(new Date());
+  return getTodayIso();
 }
 
 function focusGridOnDate(isoDate) {
-  if (!isoDate) return;
-  const anchor = getGridAnchorDate();
-  const diffDays = daysBetween(anchor, isoDate);
-  state.gridWeekOffset = Math.floor(diffDays / GRID_DAYS);
+  scrollGridToDate(isoDate);
 }
 
 async function assignEventFromDrop(eventId, teamRaw) {
@@ -997,13 +1196,14 @@ async function assignEventFromDrop(eventId, teamRaw) {
   item.team = team;
 
   if (isAssignedTeam(team)) {
-    focusGridOnDate(item.date);
+    ensureDateInGridRange(item.date);
   }
 
   saveEvents();
   renderEventsView();
 
   if (isAssignedTeam(team)) {
+    scrollGridToDate(item.date);
     setSyncStatus("Km hesaplaniyor...", "info");
     try {
       await recalculateAllValidations();
@@ -1078,17 +1278,12 @@ function renderBosPool() {
   });
 }
 
-function renderEventGrid() {
+function renderEventGrid(options = {}) {
+  initGridRange();
   const dates = getGridDates();
   const teams = getFilteredTeams();
-
-  if (dates.length) {
-    const first = SahneDates.isoToDisplay(dates[0]);
-    const last = SahneDates.isoToDisplay(dates[dates.length - 1]);
-    els.gridRangeLabel.textContent = `${first} – ${last}`;
-  } else {
-    els.gridRangeLabel.textContent = "";
-  }
+  const today = getTodayIso();
+  const prevScroll = options.preserveScroll ? (options.prevScroll ?? els.scheduleGrid.scrollLeft) : null;
 
   renderBosPool();
 
@@ -1105,21 +1300,22 @@ function renderEventGrid() {
 
   dates.forEach((date) => {
     const dateTh = document.createElement("th");
-    dateTh.className = "col-event date-header";
+    dateTh.className = `col-event date-header${date === today ? " is-today" : ""}`;
     dateTh.colSpan = 2;
+    dateTh.dataset.gridDate = date;
     dateTh.textContent = SahneDates.isoToDisplay(date);
     headRow1.appendChild(dateTh);
   });
   thead.appendChild(headRow1);
 
   const headRow2 = document.createElement("tr");
-  dates.forEach(() => {
+  dates.forEach((date) => {
     const eventSub = document.createElement("th");
-    eventSub.className = "col-event sub-header";
+    eventSub.className = `col-event sub-header${date === today ? " is-today" : ""}`;
     eventSub.textContent = "Etkinlik";
     headRow2.appendChild(eventSub);
     const kmSub = document.createElement("th");
-    kmSub.className = "col-km sub-header";
+    kmSub.className = `col-km sub-header${date === today ? " is-today" : ""}`;
     kmSub.textContent = "Km / Mazot";
     headRow2.appendChild(kmSub);
   });
@@ -1135,6 +1331,7 @@ function renderEventGrid() {
     for (let sub = 0; sub < GRID_SUB_ROWS; sub += 1) {
       const tr = document.createElement("tr");
       tr.className = `${rowClass} sub-row`;
+      tr.dataset.gridTeam = team;
 
       if (sub === 0) {
         const teamTd = document.createElement("td");
@@ -1149,12 +1346,15 @@ function renderEventGrid() {
         const eventOnDate = eventsByDate.get(date);
         if (eventOnDate && sub > 0) return;
 
+        const isToday = date === today;
         const eventCell = document.createElement("td");
-        eventCell.className = "col-event cell-event drop-zone";
+        eventCell.className = `col-event cell-event drop-zone${isToday ? " is-today" : ""}`;
+        eventCell.dataset.gridDate = date;
+        eventCell.dataset.gridTeam = team;
         bindDropZone(eventCell, team);
 
         const kmCell = document.createElement("td");
-        kmCell.className = "col-km cell-km drop-zone";
+        kmCell.className = `col-km cell-km drop-zone${isToday ? " is-today" : ""}`;
         bindDropZone(kmCell, team);
 
         if (eventOnDate) {
@@ -1212,8 +1412,28 @@ function renderEventGrid() {
   });
 
   table.appendChild(tbody);
+
+  const inner = document.createElement("div");
+  inner.className = "grid-scroll-inner";
+  const connectors = document.createElement("div");
+  connectors.className = "grid-connectors";
+  inner.appendChild(connectors);
+  inner.appendChild(table);
+
   els.scheduleGrid.innerHTML = "";
-  els.scheduleGrid.appendChild(table);
+  els.scheduleGrid.appendChild(inner);
+
+  if (options.preserveScroll && prevScroll != null) {
+    els.scheduleGrid.scrollLeft = prevScroll + (options.scrollAdjust || 0);
+    updateGridRangeLabel();
+    requestAnimationFrame(() => renderTravelArrows());
+  } else if (!state.gridDidInitialScroll) {
+    state.gridDidInitialScroll = true;
+    scrollGridToDate(getTodayIso());
+  } else {
+    updateGridRangeLabel();
+    requestAnimationFrame(() => renderTravelArrows());
+  }
 }
 
 bootstrap().catch((err) => console.error(err));
