@@ -598,8 +598,8 @@ td {
 
 .schedule-grid {
   border-collapse: collapse;
-  min-width: 100%;
   table-layout: fixed;
+  width: max-content;
 }
 
 .schedule-grid th,
