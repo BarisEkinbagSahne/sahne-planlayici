@@ -50,11 +50,7 @@
             Tarih (GG.AA.YYYY)
             <input id="event-date" type="text" inputmode="numeric" placeholder="01.06.2026" required />
           </label>
-          <div>
-            <div class="team-buttons-title">Ekip</div>
-            <div id="event-team-buttons" class="team-buttons"></div>
-            <input id="event-team-value" type="hidden" required />
-          </div>
+          <p class="form-hint">Yeni isler otomatik olarak <strong>Boş</strong> alanina eklenir; ekiplere surukleyerek atayin.</p>
           <label>
             Mekan
             <input id="event-venue" type="text" placeholder="Orn: Ataturk Kultur Merkezi" required />
@@ -73,6 +69,10 @@
         <div class="table-header">
           <h2>Etkinlikler</h2>
           <div class="table-actions">
+            <div class="view-toggle" role="group" aria-label="Gorunum secimi">
+              <button id="view-table-btn" class="ghost view-btn" type="button" data-view="table">Gorunum 1</button>
+              <button id="view-grid-btn" class="ghost view-btn active" type="button" data-view="grid">Gorunum 2</button>
+            </div>
             <a href="bubilet.html" class="ghost btn-link">Bubilet</a>
             <button id="revalidate-btn" class="ghost" type="button">Tum verilerde Km tekrar hesapla</button>
           </div>
@@ -81,7 +81,24 @@
           <span>Ekip Filtresi:</span>
           <div id="table-team-filters" class="team-buttons"></div>
         </div>
-        <div class="table-wrapper">
+
+        <div id="event-grid-view" class="event-grid-layout">
+          <aside class="bos-panel">
+            <h3>Boş</h3>
+            <p class="bos-hint">Atanmamis yeni isler burada. Ekip ve tarih hucrelerine surukleyin.</p>
+            <div id="bos-pool" class="bos-pool drop-zone" data-drop-team="" data-drop-date=""></div>
+          </aside>
+          <div class="schedule-panel">
+            <div class="grid-nav">
+              <button id="grid-prev-btn" class="ghost" type="button" aria-label="Onceki hafta">&#9664;</button>
+              <span id="grid-range-label"></span>
+              <button id="grid-next-btn" class="ghost" type="button" aria-label="Sonraki hafta">&#9654;</button>
+            </div>
+            <div id="schedule-grid" class="schedule-grid-wrapper"></div>
+          </div>
+        </div>
+
+        <div id="event-table-view" class="table-wrapper hidden">
           <table>
             <thead>
               <tr>

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchBubiletSessions, mergeBubiletEvents, compareBubiletEvents, normalizeBubiletUrl, BUBILET_ARTIST_URL } from "./server/bubilet.js";
+import { createDataStore } from "./server/store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -16,6 +17,8 @@ const DEFAULT_STORE = {
   settings: { defaultFuelPrice: 70, bubiletUrl: BUBILET_ARTIST_URL },
 };
 
+const dataStore = createDataStore({ dataFile: DATA_FILE, defaultStore: DEFAULT_STORE });
+
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -25,27 +28,6 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
 };
-
-let writeQueue = Promise.resolve();
-
-async function ensureDataFile() {
-  await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  try {
-    await fs.access(DATA_FILE);
-  } catch {
-    await fs.writeFile(DATA_FILE, JSON.stringify(DEFAULT_STORE, null, 2), "utf8");
-  }
-}
-
-async function readStore() {
-  const raw = await fs.readFile(DATA_FILE, "utf8");
-  return JSON.parse(raw);
-}
-
-function queueWriteStore(store) {
-  writeQueue = writeQueue.then(() => fs.writeFile(DATA_FILE, JSON.stringify(store, null, 2), "utf8"));
-  return writeQueue;
-}
 
 function sendJson(res, status, payload) {
   res.writeHead(status, {
@@ -110,8 +92,8 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (url.pathname === "/api/data" && req.method === "GET") {
-      const store = await readStore();
-      sendJson(res, 200, store);
+      const store = await dataStore.read();
+      sendJson(res, 200, { ...store, _storage: dataStore.mode });
       return;
     }
 
@@ -121,21 +103,21 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { error: "Gecersiz veri yapisi" });
         return;
       }
-      await queueWriteStore(payload);
-      sendJson(res, 200, { ok: true });
+      await dataStore.queueWrite(payload);
+      sendJson(res, 200, { ok: true, storage: dataStore.mode });
       return;
     }
 
     if (url.pathname === "/api/bubilet/compare" && req.method === "POST") {
-      const store = await readStore();
+      const store = await dataStore.read();
       const body = (await readBody(req)) || {};
       const bubiletUrl = normalizeBubiletUrl(body.url || store.settings?.bubiletUrl);
       store.settings = { ...store.settings, bubiletUrl };
-      await queueWriteStore(store);
+      await dataStore.queueWrite(store);
 
       const sessions = await fetchBubiletSessions(bubiletUrl);
       const compared = compareBubiletEvents(store.events, sessions, {
-        defaultTeam: body.defaultTeam || "Barış",
+        defaultTeam: body.defaultTeam || "Boş",
         defaultFuelPrice: store.settings?.defaultFuelPrice ?? 70,
       });
 
@@ -157,19 +139,19 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === "/api/bubilet/add" && req.method === "POST") {
-      const store = await readStore();
+      const store = await dataStore.read();
       const body = (await readBody(req)) || {};
       const bubiletUrl = normalizeBubiletUrl(body.url || store.settings?.bubiletUrl);
       store.settings = { ...store.settings, bubiletUrl };
 
       const sessions = await fetchBubiletSessions(bubiletUrl);
       const merged = mergeBubiletEvents(store.events, sessions, {
-        defaultTeam: body.defaultTeam || "Barış",
+        defaultTeam: body.defaultTeam || "Boş",
         defaultFuelPrice: store.settings?.defaultFuelPrice ?? 70,
       });
 
       store.events = merged.events;
-      await queueWriteStore(store);
+      await dataStore.queueWrite(store);
       sendJson(res, 200, {
         ok: true,
         bubiletUrl,
@@ -198,17 +180,17 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === "/api/bubilet/import" && req.method === "POST") {
-      const store = await readStore();
+      const store = await dataStore.read();
       const body = (await readBody(req)) || {};
       const bubiletUrl = normalizeBubiletUrl(body.url || store.settings?.bubiletUrl);
       store.settings = { ...store.settings, bubiletUrl };
       const sessions = await fetchBubiletSessions(bubiletUrl);
       const merged = mergeBubiletEvents(store.events, sessions, {
-        defaultTeam: body.defaultTeam || "Barış",
+        defaultTeam: body.defaultTeam || "Boş",
         defaultFuelPrice: store.settings?.defaultFuelPrice ?? 70,
       });
       store.events = merged.events;
-      await queueWriteStore(store);
+      await dataStore.queueWrite(store);
       sendJson(res, 200, {
         ok: true,
         addedCount: merged.addedCount,
@@ -232,7 +214,10 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-await ensureDataFile();
+await dataStore.init();
 server.listen(PORT, () => {
   console.log(`Sahne Lojistik sunucusu http://localhost:${PORT} adresinde calisiyor`);
+  if (dataStore.mode === "file" && process.env.RENDER) {
+    console.warn("UYARI: Kalici depolama yok! Render ortam degiskenlerine Upstash Redis ekleyin.");
+  }
 });

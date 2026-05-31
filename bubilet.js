@@ -1,5 +1,29 @@
 const API_BASE = "";
 const DEFAULT_BUBILET_URL = "https://www.bubilet.com.tr/sanatci/candles-and-echoes-ensemble-";
+const DEFAULT_TEAM_LABEL = "Boş";
+
+function getFetchHelpMessage() {
+  if (window.location.protocol === "file:") {
+    return (
+      "Sayfa dosya olarak acilmis (file://). API calismaz.\n\n" +
+      "Yerelde: proje klasorunde npm install && npm start, sonra http://localhost:3000/bubilet.html\n\n" +
+      "Canli: https://sahne-lojistik.onrender.com/bubilet.html"
+    );
+  }
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1") {
+    return "Sunucu calismiyor olabilir. Terminalde npm start calistirin.";
+  }
+  return "Sunucuya ulasilamadi. Render uyaniyor olabilir; birkaç saniye bekleyip tekrar deneyin.";
+}
+
+function normalizeFetchError(err) {
+  const msg = err?.message || String(err);
+  if (msg === "Failed to fetch" || msg.includes("NetworkError") || msg.includes("Load failed")) {
+    return getFetchHelpMessage();
+  }
+  return msg;
+}
 
 const els = {
   urlInput: document.getElementById("bubilet-url-input"),
@@ -14,13 +38,17 @@ const els = {
 let missingEvents = [];
 
 async function apiRequest(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `API hatasi: ${res.status}`);
-  return data;
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      ...options,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `API hatasi: ${res.status}`);
+    return data;
+  } catch (err) {
+    throw new Error(normalizeFetchError(err));
+  }
 }
 
 function setSyncStatus(message, level = "info") {
@@ -55,7 +83,7 @@ function renderMissingRows(items) {
       <td>${formatDate(item.date)}</td>
       <td>${escapeHtml(item.venue)}</td>
       <td>${escapeHtml(item.destination)}</td>
-      <td>${escapeHtml(item.team || "Barış")}</td>
+      <td>${escapeHtml(item.team || DEFAULT_TEAM_LABEL)}</td>
     `;
     els.missingTbody.appendChild(tr);
   }
@@ -111,7 +139,10 @@ async function onCheck() {
     }
     setSyncStatus("Kontrol tamamlandi", "ok");
   } catch (err) {
-    renderMissingRows([]);
+    els.missingTbody.innerHTML = '<tr><td colspan="4" class="empty-cell">Kontrol yapilamadi.</td></tr>';
+    els.missingCount.textContent = "0 kayit";
+    els.addBtn.disabled = true;
+    missingEvents = [];
     setSummary(`Kontrol basarisiz: ${err.message}`, "error");
     setSyncStatus(`Hata: ${err.message}`, "error");
   } finally {

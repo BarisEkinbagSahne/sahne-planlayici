@@ -102,7 +102,7 @@ export async function fetchBubiletSessions(url = BUBILET_ARTIST_URL) {
 
 export function bubiletSessionToEvent(session, options = {}) {
   const {
-    defaultTeam = "Barış",
+    defaultTeam = "Boş",
     defaultFuelPrice = 70,
     startCity = "Izmir",
   } = options;

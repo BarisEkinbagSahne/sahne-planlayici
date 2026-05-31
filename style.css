@@ -138,7 +138,7 @@ button:disabled {
 
 .event-form-row {
   display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  grid-template-columns: minmax(140px, 1fr) minmax(200px, 2fr) minmax(160px, 1.5fr) minmax(120px, 1fr) auto auto;
   gap: 10px;
   align-items: end;
 }
@@ -415,5 +415,306 @@ td {
 @media (max-width: 720px) {
   .bubilet-form {
     grid-template-columns: 1fr;
+  }
+}
+
+/* --- Gorunum 2: Ekip x Tarih grid --- */
+
+.form-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #5a6478;
+  align-self: center;
+  grid-column: span 2;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid #c8d3ea;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.view-btn {
+  border-radius: 0;
+  border: none;
+  background: #fff;
+  color: #243a70;
+}
+
+.view-btn.active {
+  background: #1a4ecb;
+  color: #fff;
+}
+
+.event-grid-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.bos-panel {
+  border: 2px dashed #b8c4dc;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8faff;
+  min-height: 200px;
+}
+
+.bos-panel h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: #5a6478;
+}
+
+.bos-hint {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  color: #7a8498;
+  line-height: 1.35;
+}
+
+.bos-pool {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+}
+
+.schedule-panel {
+  overflow: hidden;
+}
+
+.grid-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#grid-range-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #243a70;
+  min-width: 180px;
+  text-align: center;
+}
+
+.schedule-grid-wrapper {
+  overflow-x: auto;
+  border: 1px solid #c8d3ea;
+  border-radius: 8px;
+}
+
+.schedule-grid {
+  border-collapse: collapse;
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.schedule-grid th,
+.schedule-grid td {
+  border: 1px solid #b8c4dc;
+  padding: 0;
+  vertical-align: top;
+  font-size: 0.78rem;
+}
+
+.schedule-grid thead th {
+  background: #eef2fb;
+  text-align: center;
+  padding: 6px 4px;
+  font-weight: 600;
+  color: #243a70;
+}
+
+.schedule-grid .col-ekip {
+  width: 72px;
+  min-width: 72px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+
+.schedule-grid .col-event {
+  min-width: 180px;
+}
+
+.schedule-grid .col-km {
+  width: 72px;
+  min-width: 72px;
+  background: #f5f7fb;
+}
+
+.schedule-grid .date-header {
+  border-bottom: 1px solid #a8b8d8;
+}
+
+.schedule-grid .sub-header {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #5a6478;
+}
+
+.schedule-grid .team-label {
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  vertical-align: middle;
+  writing-mode: horizontal-tb;
+  padding: 4px;
+}
+
+.schedule-grid .sub-row {
+  height: 22px;
+}
+
+.schedule-grid .cell-event {
+  padding: 2px 4px;
+  height: 22px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 18px;
+}
+
+.schedule-grid .cell-km {
+  padding: 2px 4px;
+  height: 22px;
+  font-size: 0.72rem;
+  color: #4a5568;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.schedule-grid .drop-zone {
+  min-height: 88px;
+}
+
+.schedule-grid .drop-zone.drag-over,
+.bos-pool.drag-over {
+  outline: 2px solid #1a4ecb;
+  outline-offset: -2px;
+  background: rgba(26, 78, 203, 0.06);
+}
+
+.grid-row-bcs { background: #dceeff; }
+.grid-row-baris { background: #ffe0ec; }
+.grid-row-barkin { background: #fff5cc; }
+.grid-row-diger { background: #dff5e3; }
+.grid-row-diger2 { background: #ebe0ff; }
+.grid-row-default { background: #f0f4fa; }
+
+.grid-row-bcs .team-label { background: #c5e0ff; }
+.grid-row-baris .team-label { background: #ffd0e3; }
+.grid-row-barkin .team-label { background: #ffeeb0; }
+.grid-row-diger .team-label { background: #c8eed0; }
+.grid-row-diger2 .team-label { background: #ddd0ff; }
+.grid-row-default .team-label { background: #e4eaf4; }
+
+.event-card {
+  border: 1px solid #8aa8e8;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px;
+  cursor: grab;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  box-shadow: 0 1px 4px rgba(24, 40, 72, 0.1);
+  user-select: none;
+}
+
+.event-card:active {
+  cursor: grabbing;
+}
+
+.event-card.dragging {
+  opacity: 0.45;
+}
+
+.event-card .card-venue {
+  font-weight: 600;
+  color: #1d2430;
+  margin-bottom: 2px;
+}
+
+.event-card .card-route {
+  color: #4a5568;
+  font-size: 0.74rem;
+}
+
+.event-card .card-meta {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #5a6478;
+}
+
+.event-card .card-status {
+  margin-top: 4px;
+}
+
+.event-card .card-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 4px;
+}
+
+.event-card .card-actions button {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+.grid-event-block {
+  border: 1px solid #6a8fd8;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  margin: 1px;
+  padding: 1px 3px;
+  cursor: grab;
+  height: calc(100% - 2px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: hidden;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.grid-event-block:active {
+  cursor: grabbing;
+}
+
+.grid-event-block .ge-venue {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-event-block .ge-route {
+  color: #4a5568;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-event-block .ge-status {
+  font-size: 0.68rem;
+}
+
+.grid-empty-slot {
+  color: transparent;
+}
+
+@media (max-width: 900px) {
+  .event-grid-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .form-hint {
+    grid-column: 1 / -1;
   }
 }

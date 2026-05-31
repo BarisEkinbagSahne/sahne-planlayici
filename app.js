@@ -1,6 +1,9 @@
 const DAILY_KM_LIMIT = 800;
 const DEFAULT_FUEL_PRICE = 70;
 const FUEL_LITER_PER_100KM = 11;
+const UNASSIGNED_TEAM = "Boş";
+const GRID_DAYS = 7;
+const GRID_SUB_ROWS = 4;
 
 const API_BASE = "";
 
@@ -24,8 +27,9 @@ const state = {
   geoCache: {},
   roadCache: {},
   returnToIzmirDraft: false,
-  selectedTeam: "",
   teamFilter: "ALL",
+  eventView: "grid",
+  gridWeekOffset: 0,
   defaultFuelPrice: DEFAULT_FUEL_PRICE,
   bubiletUrl: "",
 };
@@ -39,8 +43,6 @@ const els = {
   teamList: document.getElementById("team-list"),
   defaultFuelPriceInput: document.getElementById("default-fuel-price-input"),
   eventForm: document.getElementById("event-form"),
-  eventTeamButtons: document.getElementById("event-team-buttons"),
-  eventTeamValue: document.getElementById("event-team-value"),
   eventDate: document.getElementById("event-date"),
   eventDestination: document.getElementById("event-destination"),
   eventVenue: document.getElementById("event-venue"),
@@ -48,6 +50,15 @@ const els = {
   submitBtn: document.getElementById("submit-btn"),
   validationBox: document.getElementById("validation-box"),
   eventTbody: document.getElementById("event-tbody"),
+  eventGridView: document.getElementById("event-grid-view"),
+  eventTableView: document.getElementById("event-table-view"),
+  viewTableBtn: document.getElementById("view-table-btn"),
+  viewGridBtn: document.getElementById("view-grid-btn"),
+  bosPool: document.getElementById("bos-pool"),
+  scheduleGrid: document.getElementById("schedule-grid"),
+  gridRangeLabel: document.getElementById("grid-range-label"),
+  gridPrevBtn: document.getElementById("grid-prev-btn"),
+  gridNextBtn: document.getElementById("grid-next-btn"),
   teamItemTemplate: document.getElementById("team-item-template"),
   revalidateBtn: document.getElementById("revalidate-btn"),
   syncStatus: document.getElementById("sync-status"),
@@ -106,6 +117,11 @@ function bindEvents() {
   els.eventVenue.addEventListener("input", debounce(runLiveValidation, 250));
   els.defaultFuelPriceInput.addEventListener("change", onDefaultFuelPriceChange);
   els.revalidateBtn.addEventListener("click", revalidateAllRows);
+  els.viewTableBtn.addEventListener("click", () => setEventView("table"));
+  els.viewGridBtn.addEventListener("click", () => setEventView("grid"));
+  els.gridPrevBtn.addEventListener("click", () => shiftGridWeek(-1));
+  els.gridNextBtn.addEventListener("click", () => shiftGridWeek(1));
+  setupDragDropRoot();
 }
 
 function setSyncStatus(message, level = "info") {
@@ -132,6 +148,9 @@ async function loadFromServer() {
   state.roadCache = data.roadCache || {};
   state.defaultFuelPrice = toPositiveNumber(data.settings?.defaultFuelPrice, DEFAULT_FUEL_PRICE);
   state.bubiletUrl = data.settings?.bubiletUrl || "";
+  if (data._storage === "file" && !window.location.hostname.includes("localhost")) {
+    setSyncStatus("Veri gecici depoda - kalici kayit icin Redis kurulmali", "error");
+  }
 }
 
 async function persistState() {
@@ -178,12 +197,34 @@ function fillCitiesDatalist() {
 
 function renderAll() {
   renderTeams();
-  renderTeamButtons();
   renderTeamFilters();
   renderSettings();
   updateDraftReturnButton();
-  renderEvents();
+  renderEventsView();
   runLiveValidation();
+}
+
+function setEventView(view) {
+  state.eventView = view === "table" ? "table" : "grid";
+  renderEventsView();
+}
+
+function renderEventsView() {
+  const isGrid = state.eventView === "grid";
+  els.eventGridView.classList.toggle("hidden", !isGrid);
+  els.eventTableView.classList.toggle("hidden", isGrid);
+  els.viewTableBtn.classList.toggle("active", !isGrid);
+  els.viewGridBtn.classList.toggle("active", isGrid);
+  if (isGrid) {
+    renderEventGrid();
+  } else {
+    renderEvents();
+  }
+}
+
+function shiftGridWeek(delta) {
+  state.gridWeekOffset += delta;
+  renderEventGrid();
 }
 
 function renderSettings() {
@@ -200,27 +241,6 @@ function renderTeams() {
   });
 }
 
-function renderTeamButtons() {
-  if (!state.selectedTeam || !state.teams.includes(state.selectedTeam)) {
-    state.selectedTeam = state.teams.includes("Barış") ? "Barış" : state.teams[0] || "";
-  }
-  els.eventTeamValue.value = state.selectedTeam;
-  els.eventTeamButtons.innerHTML = "";
-  state.teams.forEach((team, index) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `team-chip ${getTeamColorClass(team)}${team === state.selectedTeam ? " active" : ""}`;
-    btn.textContent = team;
-    btn.addEventListener("click", () => {
-      state.selectedTeam = team;
-      els.eventTeamValue.value = team;
-      renderTeamButtons();
-      runLiveValidation();
-    });
-    els.eventTeamButtons.appendChild(btn);
-  });
-}
-
 function renderTeamFilters() {
   if (!state.teamFilter) state.teamFilter = "ALL";
   if (state.teamFilter !== "ALL" && !state.teams.includes(state.teamFilter)) state.teamFilter = "ALL";
@@ -233,7 +253,7 @@ function renderTeamFilters() {
   allBtn.addEventListener("click", () => {
     state.teamFilter = "ALL";
     renderTeamFilters();
-    renderEvents();
+    renderEventsView();
   });
   els.tableTeamFilters.appendChild(allBtn);
 
@@ -245,7 +265,7 @@ function renderTeamFilters() {
     btn.addEventListener("click", () => {
       state.teamFilter = team;
       renderTeamFilters();
-      renderEvents();
+      renderEventsView();
     });
     els.tableTeamFilters.appendChild(btn);
   });
@@ -274,9 +294,8 @@ function onAddTeam(e) {
   state.teams.push(name);
   saveTeams();
   renderTeams();
-  renderTeamButtons();
   renderTeamFilters();
-  renderEvents();
+  renderEventsView();
   els.teamNameInput.value = "";
 }
 
@@ -288,20 +307,18 @@ function deleteTeam(team) {
   state.teams = state.teams.filter((t) => t !== team);
   saveTeams();
   renderTeams();
-  renderTeamButtons();
   renderTeamFilters();
-  renderEvents();
+  renderEventsView();
 }
 
 function getFormPayload() {
-  const team = state.selectedTeam || els.eventTeamValue.value;
   const date = SahneDates.displayToIso(els.eventDate.value);
   const destination = normalizeCityName(els.eventDestination.value);
   const venue = normalizeText(els.eventVenue.value);
   const returnToIzmir = state.returnToIzmirDraft;
-  if (!team || !date || !destination || !venue) return null;
+  if (!date || !destination || !venue) return null;
   return {
-    team,
+    team: UNASSIGNED_TEAM,
     date,
     destination,
     venue,
@@ -311,8 +328,11 @@ function getFormPayload() {
 }
 
 function validatePayload(item) {
-  if (!item.team || !item.date || !item.destination || !item.venue) {
+  if (!item.date || !item.destination || !item.venue) {
     return { ok: false, message: "Tum alanlar zorunlu." };
+  }
+  if (isAssignedTeam(item.team) && !state.teams.includes(item.team)) {
+    return { ok: false, message: "Ekip listede bulunamadi." };
   }
   if (!isKnownCity(item.destination)) {
     return { ok: false, message: "Il listeden secilmeli." };
@@ -335,10 +355,6 @@ async function onSaveEvent(e) {
     alert(req.message);
     return;
   }
-  if (hasSameDayConflict(payload, null)) {
-    alert("Ayni ekip ayni tarihte birden fazla is alamaz.");
-    return;
-  }
   state.events.push({
     id: crypto.randomUUID(),
     ...payload,
@@ -350,17 +366,20 @@ async function onSaveEvent(e) {
     adviceText: "",
   });
   saveEvents();
-  renderEvents();
+  renderEventsView();
   els.eventForm.reset();
   state.returnToIzmirDraft = false;
   updateDraftReturnButton();
-  renderTeamButtons();
   runLiveValidation();
 }
 
 function createTeamSelect(value, onChange) {
   const sel = document.createElement("select");
   sel.className = "cell-select";
+  const bosOpt = document.createElement("option");
+  bosOpt.value = UNASSIGNED_TEAM;
+  bosOpt.textContent = UNASSIGNED_TEAM;
+  sel.appendChild(bosOpt);
   state.teams.forEach((team) => {
     const opt = document.createElement("option");
     opt.value = team;
@@ -519,7 +538,7 @@ function updateEventField(eventId, field, value) {
   const req = validatePayload(item);
   if (!req.ok) {
     alert(req.message);
-    renderEvents();
+    renderEventsView();
     return;
   }
   if (field === "fuelPricePerLiter" && Number.isFinite(item.avgKm)) {
@@ -527,13 +546,13 @@ function updateEventField(eventId, field, value) {
     item.fuelCost = item.fuelLiterUsed * toPositiveNumber(item.fuelPricePerLiter, state.defaultFuelPrice);
   }
   saveEvents();
-  renderEvents();
+  renderEventsView();
 }
 
 function deleteEvent(eventId) {
   state.events = state.events.filter((x) => x.id !== eventId);
   saveEvents();
-  renderEvents();
+  renderEventsView();
 }
 
 async function runLiveValidation() {
@@ -575,7 +594,7 @@ function onDefaultFuelPriceChange() {
     }
   });
   saveEvents();
-  renderEvents();
+  renderEventsView();
 }
 
 function setValidationBox(message, level) {
@@ -615,11 +634,15 @@ async function recalculateAllValidations() {
   }
 
   await persistState();
-  renderEvents();
+  renderEventsView();
   runLiveValidation();
 }
 
 async function validateEvent(candidate, excludeEventId, options = { skipSameDayConflict: false }) {
+  if (isUnassignedTeam(candidate.team)) {
+    return { status: "UYGUN", message: "Atama bekliyor (Bos alani)." };
+  }
+
   const sameDayConflict = hasSameDayConflict(candidate, excludeEventId);
   if (sameDayConflict && !options.skipSameDayConflict) {
     return { status: "HATALI", message: "Ayni ekip ayni tarihte birden fazla is alamaz." };
@@ -655,6 +678,7 @@ async function validateEvent(candidate, excludeEventId, options = { skipSameDayC
 }
 
 function hasSameDayConflict(candidate, excludeEventId) {
+  if (isUnassignedTeam(candidate.team)) return false;
   return state.events.some((ev) => {
     if (ev.id === excludeEventId) return false;
     if (normalizeTeamName(ev.team) !== normalizeTeamName(candidate.team)) return false;
@@ -690,6 +714,7 @@ async function checkLeg(dateA, cityA, dateB, cityB, label) {
 }
 
 function getStartCityForCandidate(candidate, excludeEventId) {
+  if (isUnassignedTeam(candidate.team)) return IZMIR;
   const prev = getPreviousTeamEvent(candidate.team, candidate.date, excludeEventId);
   if (!prev) return IZMIR;
   return getEventEndCity(prev);
@@ -821,6 +846,357 @@ function debounce(fn, waitMs) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), waitMs);
   };
+}
+
+function isUnassignedTeam(team) {
+  if (!team) return true;
+  const n = normalizeTeamName(team).toLowerCase();
+  return n === "bos" || n === "boş";
+}
+
+function isAssignedTeam(team) {
+  return !isUnassignedTeam(team);
+}
+
+function getGridTeamRowClass(team) {
+  const n = normalizeTeamName(team).toLowerCase();
+  if (n === "bcs") return "grid-row-bcs";
+  if (n.includes("baris") || n.includes("barış")) return "grid-row-baris";
+  if (n.includes("barkin") || n.includes("barkın")) return "grid-row-barkin";
+  if (n === "diger2" || n === "diğer2") return "grid-row-diger2";
+  if (n === "diger" || n === "diğer") return "grid-row-diger";
+  return "grid-row-default";
+}
+
+function isoFromDate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function addDaysToIso(iso, days) {
+  const d = SahneDates.parseIsoLocal(iso);
+  d.setDate(d.getDate() + days);
+  return isoFromDate(d);
+}
+
+function getGridWeekStart() {
+  const assignedDates = state.events
+    .filter((e) => isAssignedTeam(e.team) && e.date)
+    .map((e) => e.date)
+    .sort();
+  const unassignedDates = state.events
+    .filter((e) => isUnassignedTeam(e.team) && e.date)
+    .map((e) => e.date)
+    .sort();
+  const allDates = [...assignedDates, ...unassignedDates];
+  let base = allDates.length ? allDates[0] : isoFromDate(new Date());
+  if (state.gridWeekOffset !== 0) {
+    base = addDaysToIso(base, state.gridWeekOffset * GRID_DAYS);
+  }
+  return base;
+}
+
+function getGridDates() {
+  const start = getGridWeekStart();
+  const dates = [];
+  for (let i = 0; i < GRID_DAYS; i += 1) {
+    dates.push(addDaysToIso(start, i));
+  }
+  return dates;
+}
+
+function getFilteredTeams() {
+  if (state.teamFilter === "ALL") return state.teams.slice();
+  return state.teams.filter((t) => t === state.teamFilter);
+}
+
+function getEventRouteLabel(event) {
+  const dest = (event.destination || "").toUpperCase();
+  if (event.returnToIzmir) return `${dest} (IZMIRE DON)`;
+  return dest;
+}
+
+function formatEventKm(event) {
+  return Number.isFinite(event.avgKm) ? `${event.avgKm.toFixed(0)} km` : "-";
+}
+
+function formatEventFuel(event) {
+  if (Number.isFinite(event.fuelCost)) return `${event.fuelCost.toFixed(0)} TL`;
+  return "-";
+}
+
+let dragEventId = null;
+
+function setupDragDropRoot() {
+  document.addEventListener("dragend", () => {
+    dragEventId = null;
+    document.querySelectorAll(".drag-over").forEach((el) => el.classList.remove("drag-over"));
+    document.querySelectorAll(".dragging").forEach((el) => el.classList.remove("dragging"));
+  });
+}
+
+function makeDraggable(el, eventId) {
+  el.draggable = true;
+  el.addEventListener("dragstart", (e) => {
+    dragEventId = eventId;
+    e.dataTransfer.setData("text/plain", eventId);
+    e.dataTransfer.effectAllowed = "move";
+    el.classList.add("dragging");
+  });
+}
+
+function bindDropZone(el, team, date) {
+  el.classList.add("drop-zone");
+  el.dataset.dropTeam = team || UNASSIGNED_TEAM;
+  el.dataset.dropDate = date || "";
+  el.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    el.classList.add("drag-over");
+  });
+  el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
+  el.addEventListener("drop", (e) => {
+    e.preventDefault();
+    el.classList.remove("drag-over");
+    const eventId = e.dataTransfer.getData("text/plain") || dragEventId;
+    if (!eventId) return;
+    assignEventFromDrop(eventId, el.dataset.dropTeam, el.dataset.dropDate);
+  });
+}
+
+async function assignEventFromDrop(eventId, teamRaw, dateRaw) {
+  const item = state.events.find((x) => x.id === eventId);
+  if (!item) return;
+
+  const team = isUnassignedTeam(teamRaw) || !teamRaw ? UNASSIGNED_TEAM : teamRaw;
+  const date = dateRaw || item.date;
+
+  if (isAssignedTeam(team)) {
+    const candidate = { ...item, team, date };
+    if (hasSameDayConflict(candidate, eventId)) {
+      alert("Ayni ekip ayni tarihte birden fazla is alamaz.");
+      return;
+    }
+  }
+
+  item.team = team;
+  if (dateRaw) item.date = date;
+
+  saveEvents();
+  renderEventsView();
+
+  if (isAssignedTeam(team)) {
+    setSyncStatus("Km hesaplaniyor...", "info");
+    try {
+      await recalculateAllValidations();
+    } catch (err) {
+      setSyncStatus(`Hesaplama hatasi: ${err.message}`, "error");
+    }
+  }
+}
+
+function createEventCard(event) {
+  const card = document.createElement("div");
+  card.className = "event-card";
+  card.dataset.eventId = event.id;
+  makeDraggable(card, event.id);
+
+  const venue = document.createElement("div");
+  venue.className = "card-venue";
+  venue.textContent = event.venue || "-";
+  card.appendChild(venue);
+
+  const route = document.createElement("div");
+  route.className = "card-route";
+  route.textContent = `${SahneDates.isoToDisplay(event.date)} · ${getEventRouteLabel(event)}`;
+  card.appendChild(route);
+
+  const meta = document.createElement("div");
+  meta.className = "card-meta";
+  meta.textContent = `Ort. Km: ${formatEventKm(event)} | Mazot: ${formatEventFuel(event)}`;
+  card.appendChild(meta);
+
+  if (event.validation) {
+    const status = document.createElement("div");
+    status.className = "card-status";
+    status.innerHTML = `${renderStatusPill(event.validation.status)} ${event.validation.message || ""}`;
+    card.appendChild(status);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.className = "danger";
+  delBtn.textContent = "Sil";
+  delBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    deleteEvent(event.id);
+  });
+  actions.appendChild(delBtn);
+  card.appendChild(actions);
+
+  return card;
+}
+
+function renderBosPool() {
+  els.bosPool.innerHTML = "";
+  bindDropZone(els.bosPool, UNASSIGNED_TEAM, "");
+
+  const unassigned = state.events
+    .filter((e) => isUnassignedTeam(e.team))
+    .sort(sortByDateThenId);
+
+  if (!unassigned.length) {
+    const empty = document.createElement("p");
+    empty.className = "bos-hint";
+    empty.textContent = "Bos is yok.";
+    els.bosPool.appendChild(empty);
+    return;
+  }
+
+  unassigned.forEach((event) => {
+    els.bosPool.appendChild(createEventCard(event));
+  });
+}
+
+function renderEventGrid() {
+  const dates = getGridDates();
+  const teams = getFilteredTeams();
+
+  if (dates.length) {
+    const first = SahneDates.isoToDisplay(dates[0]);
+    const last = SahneDates.isoToDisplay(dates[dates.length - 1]);
+    els.gridRangeLabel.textContent = `${first} – ${last}`;
+  } else {
+    els.gridRangeLabel.textContent = "";
+  }
+
+  renderBosPool();
+
+  const table = document.createElement("table");
+  table.className = "schedule-grid";
+
+  const thead = document.createElement("thead");
+  const headRow1 = document.createElement("tr");
+  const ekipTh = document.createElement("th");
+  ekipTh.className = "col-ekip";
+  ekipTh.rowSpan = 2;
+  ekipTh.textContent = "Ekip";
+  headRow1.appendChild(ekipTh);
+
+  dates.forEach((date) => {
+    const dateTh = document.createElement("th");
+    dateTh.className = "col-event date-header";
+    dateTh.colSpan = 2;
+    dateTh.textContent = SahneDates.isoToDisplay(date);
+    headRow1.appendChild(dateTh);
+  });
+  thead.appendChild(headRow1);
+
+  const headRow2 = document.createElement("tr");
+  dates.forEach(() => {
+    const eventSub = document.createElement("th");
+    eventSub.className = "col-event sub-header";
+    eventSub.textContent = "Etkinlik";
+    headRow2.appendChild(eventSub);
+    const kmSub = document.createElement("th");
+    kmSub.className = "col-km sub-header";
+    kmSub.textContent = "Km / Mazot";
+    headRow2.appendChild(kmSub);
+  });
+  thead.appendChild(headRow2);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  teams.forEach((team) => {
+    const rowClass = getGridTeamRowClass(team);
+    const eventsByDate = new Map();
+    state.events.filter((e) => e.team === team).forEach((e) => eventsByDate.set(e.date, e));
+
+    for (let sub = 0; sub < GRID_SUB_ROWS; sub += 1) {
+      const tr = document.createElement("tr");
+      tr.className = `${rowClass} sub-row`;
+
+      if (sub === 0) {
+        const teamTd = document.createElement("td");
+        teamTd.className = "col-ekip team-label";
+        teamTd.rowSpan = GRID_SUB_ROWS;
+        teamTd.textContent = team;
+        tr.appendChild(teamTd);
+      }
+
+      dates.forEach((date) => {
+        const eventOnDate = eventsByDate.get(date);
+        if (eventOnDate && sub > 0) return;
+
+        const eventCell = document.createElement("td");
+        eventCell.className = "col-event cell-event drop-zone";
+        bindDropZone(eventCell, team, date);
+
+        const kmCell = document.createElement("td");
+        kmCell.className = "col-km cell-km drop-zone";
+        bindDropZone(kmCell, team, date);
+
+        if (eventOnDate) {
+          eventCell.rowSpan = GRID_SUB_ROWS;
+          kmCell.rowSpan = GRID_SUB_ROWS;
+
+          const block = document.createElement("div");
+          block.className = "grid-event-block";
+          makeDraggable(block, eventOnDate.id);
+
+          const line1 = document.createElement("div");
+          line1.className = "ge-venue";
+          line1.textContent = eventOnDate.venue || "-";
+          block.appendChild(line1);
+
+          const line2 = document.createElement("div");
+          line2.className = "ge-route";
+          line2.textContent = getEventRouteLabel(eventOnDate);
+          block.appendChild(line2);
+
+          const line3 = document.createElement("div");
+          line3.textContent = `Ort. Km: ${formatEventKm(eventOnDate)}`;
+          block.appendChild(line3);
+
+          const line4 = document.createElement("div");
+          line4.className = "ge-status";
+          const statusText = eventOnDate.validation?.status || "-";
+          line4.textContent = `Durum: ${statusText} | Mazot: ${formatEventFuel(eventOnDate)}`;
+          block.appendChild(line4);
+
+          eventCell.appendChild(block);
+
+          const kmLine1 = document.createElement("div");
+          kmLine1.textContent = formatEventKm(eventOnDate);
+          kmCell.appendChild(kmLine1);
+          const kmLine2 = document.createElement("div");
+          kmLine2.textContent = formatEventFuel(eventOnDate);
+          kmCell.appendChild(kmLine2);
+          if (Number.isFinite(eventOnDate.fuelLiterUsed)) {
+            const kmLine3 = document.createElement("div");
+            kmLine3.textContent = `${eventOnDate.fuelLiterUsed.toFixed(1)} L`;
+            kmCell.appendChild(kmLine3);
+          }
+        } else {
+          eventCell.innerHTML = "&nbsp;";
+          kmCell.innerHTML = "&nbsp;";
+        }
+
+        tr.appendChild(eventCell);
+        tr.appendChild(kmCell);
+      });
+
+      tbody.appendChild(tr);
+    }
+  });
+
+  table.appendChild(tbody);
+  els.scheduleGrid.innerHTML = "";
+  els.scheduleGrid.appendChild(table);
 }
 
 bootstrap().catch((err) => console.error(err));
