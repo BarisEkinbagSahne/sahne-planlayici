@@ -947,10 +947,9 @@ function makeDraggable(el, eventId) {
   });
 }
 
-function bindDropZone(el, team, date) {
+function bindDropZone(el, team) {
   el.classList.add("drop-zone");
   el.dataset.dropTeam = team || UNASSIGNED_TEAM;
-  el.dataset.dropDate = date || "";
   el.addEventListener("dragover", (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -962,19 +961,33 @@ function bindDropZone(el, team, date) {
     el.classList.remove("drag-over");
     const eventId = e.dataTransfer.getData("text/plain") || dragEventId;
     if (!eventId) return;
-    assignEventFromDrop(eventId, el.dataset.dropTeam, el.dataset.dropDate);
+    assignEventFromDrop(eventId, el.dataset.dropTeam);
   });
 }
 
-async function assignEventFromDrop(eventId, teamRaw, dateRaw) {
+function getGridAnchorDate() {
+  const allDates = state.events
+    .map((e) => e.date)
+    .filter(Boolean)
+    .sort();
+  return allDates.length ? allDates[0] : isoFromDate(new Date());
+}
+
+function focusGridOnDate(isoDate) {
+  if (!isoDate) return;
+  const anchor = getGridAnchorDate();
+  const diffDays = daysBetween(anchor, isoDate);
+  state.gridWeekOffset = Math.floor(diffDays / GRID_DAYS);
+}
+
+async function assignEventFromDrop(eventId, teamRaw) {
   const item = state.events.find((x) => x.id === eventId);
   if (!item) return;
 
   const team = isUnassignedTeam(teamRaw) || !teamRaw ? UNASSIGNED_TEAM : teamRaw;
-  const date = dateRaw || item.date;
 
   if (isAssignedTeam(team)) {
-    const candidate = { ...item, team, date };
+    const candidate = { ...item, team };
     if (hasSameDayConflict(candidate, eventId)) {
       alert("Ayni ekip ayni tarihte birden fazla is alamaz.");
       return;
@@ -982,7 +995,10 @@ async function assignEventFromDrop(eventId, teamRaw, dateRaw) {
   }
 
   item.team = team;
-  if (dateRaw) item.date = date;
+
+  if (isAssignedTeam(team)) {
+    focusGridOnDate(item.date);
+  }
 
   saveEvents();
   renderEventsView();
@@ -1043,7 +1059,7 @@ function createEventCard(event) {
 
 function renderBosPool() {
   els.bosPool.innerHTML = "";
-  bindDropZone(els.bosPool, UNASSIGNED_TEAM, "");
+  bindDropZone(els.bosPool, UNASSIGNED_TEAM);
 
   const unassigned = state.events
     .filter((e) => isUnassignedTeam(e.team))
@@ -1122,9 +1138,10 @@ function renderEventGrid() {
 
       if (sub === 0) {
         const teamTd = document.createElement("td");
-        teamTd.className = "col-ekip team-label";
+        teamTd.className = "col-ekip team-label drop-zone";
         teamTd.rowSpan = GRID_SUB_ROWS;
         teamTd.textContent = team;
+        bindDropZone(teamTd, team);
         tr.appendChild(teamTd);
       }
 
@@ -1134,11 +1151,11 @@ function renderEventGrid() {
 
         const eventCell = document.createElement("td");
         eventCell.className = "col-event cell-event drop-zone";
-        bindDropZone(eventCell, team, date);
+        bindDropZone(eventCell, team);
 
         const kmCell = document.createElement("td");
         kmCell.className = "col-km cell-km drop-zone";
-        bindDropZone(kmCell, team, date);
+        bindDropZone(kmCell, team);
 
         if (eventOnDate) {
           eventCell.rowSpan = GRID_SUB_ROWS;
