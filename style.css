@@ -538,16 +538,16 @@ td {
 
 .travel-connector {
   position: absolute;
-  height: 32px;
+  height: 40px;
   pointer-events: none;
 }
 
 .travel-arrow-line {
   position: absolute;
-  left: 4px;
-  right: 4px;
+  left: 8px;
+  right: 8px;
   top: 50%;
-  height: 2px;
+  height: 3px;
   background: #e91e8c;
   transform: translateY(-50%);
 }
@@ -558,8 +558,8 @@ td {
   right: -2px;
   top: 50%;
   transform: translateY(-50%);
-  border: 5px solid transparent;
-  border-left: 7px solid #e91e8c;
+  border: 6px solid transparent;
+  border-left: 9px solid #e91e8c;
 }
 
 .travel-arrow-label {
@@ -567,22 +567,39 @@ td {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   background: #fff;
-  border: 1px solid #e91e8c;
-  border-radius: 5px;
-  padding: 2px 7px;
+  border: 2px solid #e91e8c;
+  border-radius: 6px;
+  padding: 3px 10px;
   font-size: 0.62rem;
-  line-height: 1.25;
+  line-height: 1.2;
   text-align: center;
   color: #c2185b;
   white-space: nowrap;
   z-index: 1;
-  box-shadow: 0 1px 3px rgba(233, 30, 140, 0.15);
+  box-shadow: 0 2px 6px rgba(233, 30, 140, 0.2);
+}
+
+.travel-arrow-title {
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #ad1457;
 }
 
 .travel-arrow-label strong {
-  font-size: 0.72rem;
-  color: #ad1457;
+  font-size: 0.8rem;
+  color: #880e4f;
+}
+
+.travel-arrow-mazot {
+  font-size: 0.62rem;
+  color: #6a1b4a;
 }
 
 .schedule-grid .date-header.is-today,
@@ -627,13 +644,29 @@ td {
 }
 
 .schedule-grid .col-event {
-  min-width: 180px;
+  width: 200px;
+  min-width: 200px;
 }
 
-.schedule-grid .col-km {
-  width: 72px;
-  min-width: 72px;
-  background: #f5f7fb;
+.schedule-grid .drop-zone {
+  min-height: 52px;
+}
+
+.schedule-grid .sub-row {
+  height: auto;
+}
+
+.schedule-grid .cell-event {
+  padding: 2px;
+  overflow: visible;
+  vertical-align: middle;
+}
+
+.schedule-grid .drop-zone.drag-over,
+.bos-pool.drag-over {
+  outline: 2px solid #1a4ecb;
+  outline-offset: -2px;
+  background: rgba(26, 78, 203, 0.06);
 }
 
 .schedule-grid .date-header {
@@ -653,40 +686,6 @@ td {
   vertical-align: middle;
   writing-mode: horizontal-tb;
   padding: 4px;
-}
-
-.schedule-grid .sub-row {
-  height: 22px;
-}
-
-.schedule-grid .cell-event {
-  padding: 2px 4px;
-  height: 22px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  line-height: 18px;
-}
-
-.schedule-grid .cell-km {
-  padding: 2px 4px;
-  height: 22px;
-  font-size: 0.72rem;
-  color: #4a5568;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.schedule-grid .drop-zone {
-  min-height: 88px;
-}
-
-.schedule-grid .drop-zone.drag-over,
-.bos-pool.drag-over {
-  outline: 2px solid #1a4ecb;
-  outline-offset: -2px;
-  background: rgba(26, 78, 203, 0.06);
 }
 
 .grid-row-bcs { background: #dceeff; }
@@ -758,17 +757,18 @@ td {
 .grid-event-block {
   border: 1px solid #6a8fd8;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.85);
-  margin: 1px;
-  padding: 1px 3px;
+  background: rgba(255, 255, 255, 0.92);
+  margin: 2px;
+  padding: 6px 8px;
   cursor: grab;
-  height: calc(100% - 2px);
+  min-height: 48px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
+  gap: 2px;
   overflow: hidden;
-  font-size: 0.72rem;
-  line-height: 1.25;
+  font-size: 0.76rem;
+  line-height: 1.3;
 }
 
 .grid-event-block:active {
@@ -787,10 +787,7 @@ td {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.grid-event-block .ge-status {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
 }
 
 .grid-empty-slot {

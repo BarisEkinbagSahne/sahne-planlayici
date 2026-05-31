@@ -2,7 +2,7 @@ const DAILY_KM_LIMIT = 800;
 const DEFAULT_FUEL_PRICE = 70;
 const FUEL_LITER_PER_100KM = 11;
 const UNASSIGNED_TEAM = "Boş";
-const GRID_SUB_ROWS = 4;
+const GRID_SUB_ROWS = 2;
 const MAX_GRID_DAYS = 42;
 const GRID_EXPAND_DAYS = 7;
 const GRID_EDGE_THRESHOLD = 120;
@@ -941,9 +941,7 @@ function getGridDates() {
 
 function measureGridDayWidth() {
   const cell = els.scheduleGrid.querySelector("[data-grid-date]");
-  if (!cell) return 252;
-  const kmCell = cell.nextElementSibling;
-  return cell.offsetWidth + (kmCell?.offsetWidth || 0);
+  return cell?.offsetWidth || 200;
 }
 
 function updateGridRangeLabel() {
@@ -1077,6 +1075,8 @@ function setupGridPanScroll() {
 async function recalculateTravelLegs() {
   state.events.forEach((item) => {
     item.travelKmFromPrev = null;
+    item.travelFuelLiterFromPrev = null;
+    item.travelFuelCostFromPrev = null;
   });
 
   for (const team of state.teams) {
@@ -1090,12 +1090,32 @@ async function recalculateTravelLegs() {
       try {
         const from = getEventEndCity(prev);
         const to = getStartCityForCandidate(curr, curr.id);
-        curr.travelKmFromPrev = await getRoadDistanceKm(from, to);
+        const km = await getRoadDistanceKm(from, to);
+        const liters = (km / 100) * FUEL_LITER_PER_100KM;
+        const price = toPositiveNumber(curr.fuelPricePerLiter, state.defaultFuelPrice);
+        curr.travelKmFromPrev = km;
+        curr.travelFuelLiterFromPrev = liters;
+        curr.travelFuelCostFromPrev = liters * price;
       } catch {
         curr.travelKmFromPrev = null;
+        curr.travelFuelLiterFromPrev = null;
+        curr.travelFuelCostFromPrev = null;
       }
     }
   }
+}
+
+function formatTravelArrowLabel(event) {
+  const km = event.travelKmFromPrev;
+  if (!Number.isFinite(km)) return "";
+  const cost = event.travelFuelCostFromPrev;
+  const liters = event.travelFuelLiterFromPrev;
+  let mazot = "-";
+  if (Number.isFinite(cost)) {
+    mazot = `${cost.toFixed(0)} TL`;
+    if (Number.isFinite(liters)) mazot += ` · ${liters.toFixed(1)} L`;
+  }
+  return `<span class="travel-arrow-title">Gidilen Km</span><strong>${Math.round(km)} km</strong><span class="travel-arrow-mazot">${mazot}</span>`;
 }
 
 function renderTravelArrows() {
@@ -1134,7 +1154,7 @@ function renderTravelArrows() {
       conn.style.left = `${x1}px`;
       conn.style.top = `${y - 16}px`;
       conn.style.width = `${x2 - x1}px`;
-      conn.innerHTML = `<span class="travel-arrow-line"></span><span class="travel-arrow-label">Gidilen Km<br><strong>${Math.round(curr.travelKmFromPrev)} km</strong></span>`;
+      conn.innerHTML = `<span class="travel-arrow-line"></span><span class="travel-arrow-label">${formatTravelArrowLabel(curr)}</span>`;
       overlay.appendChild(conn);
     }
   });
@@ -1330,7 +1350,6 @@ function renderEventGrid(options = {}) {
   dates.forEach((date) => {
     const dateTh = document.createElement("th");
     dateTh.className = `col-event date-header${date === today ? " is-today" : ""}`;
-    dateTh.colSpan = 2;
     dateTh.dataset.gridDate = date;
     dateTh.textContent = SahneDates.isoToDisplay(date);
     headRow1.appendChild(dateTh);
@@ -1343,10 +1362,6 @@ function renderEventGrid(options = {}) {
     eventSub.className = `col-event sub-header${date === today ? " is-today" : ""}`;
     eventSub.textContent = "Etkinlik";
     headRow2.appendChild(eventSub);
-    const kmSub = document.createElement("th");
-    kmSub.className = `col-km sub-header${date === today ? " is-today" : ""}`;
-    kmSub.textContent = "Km / Mazot";
-    headRow2.appendChild(kmSub);
   });
   thead.appendChild(headRow2);
   table.appendChild(thead);
@@ -1382,13 +1397,8 @@ function renderEventGrid(options = {}) {
         eventCell.dataset.gridTeam = team;
         bindDropZone(eventCell, team);
 
-        const kmCell = document.createElement("td");
-        kmCell.className = `col-km cell-km drop-zone${isToday ? " is-today" : ""}`;
-        bindDropZone(kmCell, team);
-
         if (eventOnDate) {
           eventCell.rowSpan = GRID_SUB_ROWS;
-          kmCell.rowSpan = GRID_SUB_ROWS;
 
           const block = document.createElement("div");
           block.className = "grid-event-block";
@@ -1404,36 +1414,12 @@ function renderEventGrid(options = {}) {
           line2.textContent = getEventRouteLabel(eventOnDate);
           block.appendChild(line2);
 
-          const line3 = document.createElement("div");
-          line3.textContent = `Ort. Km: ${formatEventKm(eventOnDate)}`;
-          block.appendChild(line3);
-
-          const line4 = document.createElement("div");
-          line4.className = "ge-status";
-          const statusText = eventOnDate.validation?.status || "-";
-          line4.textContent = `Durum: ${statusText} | Mazot: ${formatEventFuel(eventOnDate)}`;
-          block.appendChild(line4);
-
           eventCell.appendChild(block);
-
-          const kmLine1 = document.createElement("div");
-          kmLine1.textContent = formatEventKm(eventOnDate);
-          kmCell.appendChild(kmLine1);
-          const kmLine2 = document.createElement("div");
-          kmLine2.textContent = formatEventFuel(eventOnDate);
-          kmCell.appendChild(kmLine2);
-          if (Number.isFinite(eventOnDate.fuelLiterUsed)) {
-            const kmLine3 = document.createElement("div");
-            kmLine3.textContent = `${eventOnDate.fuelLiterUsed.toFixed(1)} L`;
-            kmCell.appendChild(kmLine3);
-          }
         } else {
           eventCell.innerHTML = "&nbsp;";
-          kmCell.innerHTML = "&nbsp;";
         }
 
         tr.appendChild(eventCell);
-        tr.appendChild(kmCell);
       });
 
       tbody.appendChild(tr);
