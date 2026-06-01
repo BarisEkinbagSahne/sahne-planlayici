@@ -602,6 +602,30 @@ td {
   color: #6a1b4a;
 }
 
+.travel-arrow-warn {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #b45309;
+  white-space: normal;
+  max-width: 140px;
+  line-height: 1.15;
+}
+
+.travel-connector-warn .travel-arrow-line {
+  background: #e65100;
+}
+
+.travel-connector-warn .travel-arrow-line::after {
+  border-left-color: #e65100;
+}
+
+.travel-connector-warn .travel-arrow-label {
+  border-color: #e65100;
+  background: #fff8f0;
+}
+
 .schedule-grid .date-header.is-today,
 .schedule-grid .sub-header.is-today,
 .schedule-grid td.is-today {

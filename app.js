@@ -645,7 +645,13 @@ async function recalculateAllValidations() {
     item.adviceText = await getReturnAdviceText(item);
   }
 
-  await recalculateTravelLegs();
+  try {
+    await recalculateTravelLegs();
+  } catch (err) {
+    console.error("Gidis km hesabi:", err);
+    setSyncStatus(`Gidis km kismen hesaplanamadi: ${err.message}`, "warn");
+  }
+
   await persistState();
   renderEventsView();
   runLiveValidation();
@@ -1076,6 +1082,9 @@ async function recalculateTravelLegs() {
     item.travelKmFromPrev = null;
     item.travelFuelLiterFromPrev = null;
     item.travelFuelCostFromPrev = null;
+    item.travelDaysFromPrev = null;
+    item.travelLegOverLimit = false;
+    item.travelLegWarning = "";
   });
 
   for (const team of state.teams) {
@@ -1095,10 +1104,19 @@ async function recalculateTravelLegs() {
         curr.travelKmFromPrev = km;
         curr.travelFuelLiterFromPrev = liters;
         curr.travelFuelCostFromPrev = liters * price;
+        const days = daysBetween(prev.date, curr.date);
+        curr.travelDaysFromPrev = days;
+        curr.travelLegOverLimit = days > 0 && km > days * DAILY_KM_LIMIT;
+        curr.travelLegWarning = curr.travelLegOverLimit
+          ? `${days} gunde izin ${days * DAILY_KM_LIMIT} km, gidilen ${Math.round(km)} km`
+          : "";
       } catch {
         curr.travelKmFromPrev = null;
         curr.travelFuelLiterFromPrev = null;
         curr.travelFuelCostFromPrev = null;
+        curr.travelDaysFromPrev = null;
+        curr.travelLegOverLimit = false;
+        curr.travelLegWarning = "";
       }
     }
   }
@@ -1132,6 +1150,21 @@ function getTravelFuelBetween(prev, curr, km) {
   return { cost: liters * price, liters };
 }
 
+function getTravelLegWarning(prev, curr, km) {
+  const days = daysBetween(prev.date, curr.date);
+  if (days <= 0) {
+    return { overLimit: true, text: "Tarih sirasi gecersiz" };
+  }
+  const maxKm = days * DAILY_KM_LIMIT;
+  if (km > maxKm) {
+    return {
+      overLimit: true,
+      text: `${days} gunde max ${maxKm} km — gidilen ${Math.round(km)} km`,
+    };
+  }
+  return { overLimit: false, text: "" };
+}
+
 function formatTravelArrowLabel(prev, curr) {
   const km = getTravelKmBetween(prev, curr);
   if (!Number.isFinite(km) || km <= 0) return "";
@@ -1141,7 +1174,13 @@ function formatTravelArrowLabel(prev, curr) {
     mazot = `${fuel.cost.toFixed(0)} TL`;
     if (Number.isFinite(fuel.liters)) mazot += ` · ${fuel.liters.toFixed(1)} L`;
   }
-  return `<span class="travel-arrow-title">Gidilen Km</span><strong>${Math.round(km)} km</strong><span class="travel-arrow-mazot">${mazot}</span>`;
+  const warn =
+    curr.travelLegWarning ||
+    (curr.travelLegOverLimit ? getTravelLegWarning(prev, curr, km).text : "");
+  const warnHtml = warn
+    ? `<span class="travel-arrow-warn">UYARI: ${warn}</span>`
+    : "";
+  return `<span class="travel-arrow-title">Gidilen Km</span><strong>${Math.round(km)} km</strong><span class="travel-arrow-mazot">${mazot}</span>${warnHtml}`;
 }
 
 function renderTravelArrows() {
@@ -1170,16 +1209,22 @@ function renderTravelArrows() {
 
       const pr = prevCell.getBoundingClientRect();
       const cr = currCell.getBoundingClientRect();
-      const x1 = pr.right - innerRect.left;
-      const x2 = cr.left - innerRect.left;
+      let x1 = pr.right - innerRect.left;
+      let x2 = cr.left - innerRect.left;
       const y = (pr.top + pr.bottom) / 2 - innerRect.top;
 
-      if (x2 <= x1 + 8) continue;
+      const minArrowWidth = 56;
+      if (x2 - x1 < minArrowWidth) {
+        const mid = (x1 + x2) / 2;
+        x1 = mid - minArrowWidth / 2;
+        x2 = mid + minArrowWidth / 2;
+      }
 
+      const warn = getTravelLegWarning(prev, curr, km);
       const conn = document.createElement("div");
-      conn.className = "travel-connector";
+      conn.className = `travel-connector${warn.overLimit ? " travel-connector-warn" : ""}`;
       conn.style.left = `${x1}px`;
-      conn.style.top = `${y - 16}px`;
+      conn.style.top = `${y - 18}px`;
       conn.style.width = `${x2 - x1}px`;
       conn.innerHTML = `<span class="travel-arrow-line"></span><span class="travel-arrow-label">${formatTravelArrowLabel(prev, curr)}</span>`;
       overlay.appendChild(conn);
@@ -1285,6 +1330,13 @@ async function assignEventFromDrop(eventId, teamRaw) {
       await recalculateAllValidations();
     } catch (err) {
       setSyncStatus(`Hesaplama hatasi: ${err.message}`, "error");
+      try {
+        await recalculateTravelLegs();
+        await persistState();
+        renderEventsView();
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
