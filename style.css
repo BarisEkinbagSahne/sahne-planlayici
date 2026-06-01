@@ -448,28 +448,34 @@ td {
 }
 
 .event-grid-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 260px) 1fr;
-  gap: 14px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.bos-panel {
+.bos-bar {
   border: 2px dashed #b8c4dc;
   border-radius: 10px;
-  padding: 12px;
+  padding: 10px 12px;
   background: #f8faff;
-  min-height: 200px;
 }
 
-.bos-panel h3 {
-  margin: 0 0 6px;
+.bos-bar-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.bos-bar-head h3 {
+  margin: 0;
   font-size: 1rem;
   color: #5a6478;
 }
 
 .bos-hint {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 0.78rem;
   color: #7a8498;
   line-height: 1.35;
@@ -477,9 +483,11 @@ td {
 
 .bos-pool {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 8px;
-  min-height: 120px;
+  min-height: 56px;
+  align-items: flex-start;
 }
 
 .schedule-panel {
@@ -525,20 +533,30 @@ td {
   min-width: 100%;
 }
 
-.travel-leg {
-  position: relative;
-  height: 26px;
+.grid-connectors {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  min-width: 48px;
+  height: 100%;
+  pointer-events: none;
+  z-index: 6;
+  overflow: visible;
+}
+
+.travel-connector {
+  position: absolute;
+  height: 28px;
+  pointer-events: none;
 }
 
 .travel-arrow-line {
   position: absolute;
-  left: 4px;
-  right: 4px;
+  left: 0;
+  right: 0;
   top: 50%;
   height: 2px;
-  background: #e91e8c;
+  background: #2e7d32;
   transform: translateY(-50%);
 }
 
@@ -549,7 +567,7 @@ td {
   top: 50%;
   transform: translateY(-50%);
   border: 5px solid transparent;
-  border-left: 7px solid #e91e8c;
+  border-left: 7px solid #2e7d32;
 }
 
 .travel-arrow-label {
@@ -558,31 +576,28 @@ td {
   top: 50%;
   transform: translate(-50%, -50%);
   background: #fff;
-  border: 1px solid #e91e8c;
+  border: 1px solid #2e7d32;
   border-radius: 4px;
-  padding: 2px 5px;
-  font-size: 0.6rem;
+  padding: 2px 6px;
+  font-size: 0.62rem;
   font-weight: 700;
   line-height: 1.1;
   text-align: center;
-  color: #880e4f;
+  color: #1b5e20;
   white-space: nowrap;
-  max-width: 92px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   z-index: 2;
-  box-shadow: 0 1px 4px rgba(233, 30, 140, 0.15);
+  box-shadow: 0 1px 4px rgba(46, 125, 50, 0.2);
 }
 
-.travel-leg-warn .travel-arrow-line {
+.travel-connector-warn .travel-arrow-line {
   background: #e65100;
 }
 
-.travel-leg-warn .travel-arrow-line::after {
+.travel-connector-warn .travel-arrow-line::after {
   border-left-color: #e65100;
 }
 
-.travel-leg-warn .travel-arrow-label {
+.travel-connector-warn .travel-arrow-label {
   border-color: #e65100;
   background: #fff8f0;
   color: #bf360c;
@@ -634,8 +649,8 @@ td {
 }
 
 .schedule-grid .col-ekip {
-  width: 72px;
-  min-width: 72px;
+  width: 108px;
+  min-width: 108px;
   position: sticky;
   left: 0;
   z-index: 2;
@@ -683,12 +698,48 @@ td {
 }
 
 .schedule-grid .team-label {
-  text-align: center;
+  text-align: left;
   font-weight: 700;
   font-size: 0.82rem;
   vertical-align: middle;
-  writing-mode: horizontal-tb;
-  padding: 4px;
+  padding: 6px 4px;
+  min-width: 72px;
+}
+
+.schedule-grid .team-name-text {
+  font-size: 0.88rem;
+  margin-bottom: 4px;
+}
+
+.schedule-grid .team-stats {
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #3d4a60;
+}
+
+.schedule-grid .team-stats strong {
+  font-weight: 700;
+  color: #1a2a4a;
+}
+
+.grid-block-actions,
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.grid-block-actions button,
+.card-actions button {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  line-height: 1.2;
+}
+
+.team-assign-btn {
+  border: 1px solid #c8d3ea;
 }
 
 .grid-row-bcs { background: #dceeff; }

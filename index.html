@@ -11,7 +11,7 @@
         location.replace(live + path + location.search + location.hash);
       }
     </script>
-    <link rel="stylesheet" href="style.css?v=20260602e" />
+    <link rel="stylesheet" href="style.css?v=20260602f" />
   </head>
   <body>
     <header class="app-header">
@@ -77,17 +77,14 @@
             <button id="revalidate-btn" class="ghost" type="button">Tum verilerde Km tekrar hesapla</button>
           </div>
         </div>
-        <div class="filter-row">
-          <span>Ekip Filtresi:</span>
-          <div id="table-team-filters" class="team-buttons"></div>
-        </div>
-
         <div id="event-grid-view" class="event-grid-layout">
-          <aside class="bos-panel">
-            <h3>Boş</h3>
-            <p class="bos-hint">Atanmamis yeni isler burada. Bir ekibin satirina surukleyin; etkinlik kendi tarihinde gorunur.</p>
+          <div class="bos-bar">
+            <div class="bos-bar-head">
+              <h3>Boş</h3>
+              <p class="bos-hint">Atanmamis yeni isler. Ekip dugmesine tiklayin veya asagidaki tabloya surukleyin.</p>
+            </div>
             <div id="bos-pool" class="bos-pool drop-zone" data-drop-team="" data-drop-date=""></div>
-          </aside>
+          </div>
           <div class="schedule-panel">
             <div class="grid-nav">
               <span id="grid-range-label"></span>
@@ -131,8 +128,8 @@
       </li>
     </template>
 
-    <script src="dates.js?v=20260602e"></script>
-    <script src="cities-coords.js?v=20260602e"></script>
-    <script src="app.js?v=20260602e"></script>
+    <script src="dates.js?v=20260602f"></script>
+    <script src="cities-coords.js?v=20260602f"></script>
+    <script src="app.js?v=20260602f"></script>
   </body>
 </html>
