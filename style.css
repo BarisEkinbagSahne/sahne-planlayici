@@ -525,25 +525,11 @@ td {
   min-width: 100%;
 }
 
-.grid-connectors {
-  position: absolute;
-  top: 0;
-  left: 0;
+.travel-leg {
+  position: relative;
+  height: 26px;
   width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 6;
-  overflow: visible;
-}
-
-.travel-connector {
-  position: absolute;
-  height: 28px;
-  pointer-events: none;
-}
-
-.travel-connector-adjacent {
-  z-index: 7;
+  min-width: 48px;
 }
 
 .travel-arrow-line {
@@ -588,27 +574,30 @@ td {
   box-shadow: 0 1px 4px rgba(233, 30, 140, 0.15);
 }
 
-.travel-connector-warn .travel-arrow-line {
+.travel-leg-warn .travel-arrow-line {
   background: #e65100;
 }
 
-.travel-connector-warn .travel-arrow-line::after {
+.travel-leg-warn .travel-arrow-line::after {
   border-left-color: #e65100;
 }
 
-.travel-connector-warn .travel-arrow-label {
+.travel-leg-warn .travel-arrow-label {
   border-color: #e65100;
   background: #fff8f0;
   color: #bf360c;
 }
 
-.schedule-grid td.has-travel-inset {
-  position: relative;
+.schedule-grid .cell-travel {
+  height: 32px;
+  padding: 2px 4px;
+  vertical-align: middle;
+  background: inherit;
 }
 
-.schedule-grid td.has-travel-inset .grid-event-block {
-  margin-left: var(--travel-inset, 92px);
-  max-width: calc(100% - var(--travel-inset, 92px));
+.schedule-grid .travel-row td {
+  border-bottom-style: dashed;
+  border-bottom-color: #c8d0e0;
 }
 
 .schedule-grid .date-header.is-today,
@@ -659,6 +648,11 @@ td {
 
 .schedule-grid .drop-zone {
   min-height: 52px;
+}
+
+.schedule-grid .cell-travel.drop-zone {
+  min-height: 32px;
+  pointer-events: none;
 }
 
 .schedule-grid .sub-row {

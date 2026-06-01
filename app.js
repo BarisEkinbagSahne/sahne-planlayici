@@ -8,7 +8,6 @@ const GRID_EXPAND_DAYS = 7;
 const GRID_EDGE_THRESHOLD = 120;
 const GRID_VENUE_MAX_CHARS = 20;
 const TRAVEL_LABEL_MAX_CHARS = 15;
-const TRAVEL_INSET_PX = 92;
 
 const API_BASE = "";
 
@@ -948,7 +947,7 @@ function getGridDates() {
 }
 
 function measureGridDayWidth() {
-  const cell = els.scheduleGrid.querySelector("[data-grid-date]");
+  const cell = els.scheduleGrid.querySelector(".cell-event[data-grid-date]");
   return cell?.offsetWidth || 200;
 }
 
@@ -983,13 +982,12 @@ function scrollGridToDate(isoDate) {
   }
   requestAnimationFrame(() => {
     const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
-    const target = inner?.querySelector(`[data-grid-date="${isoDate}"]`);
+    const target = inner?.querySelector(`.cell-event[data-grid-date="${isoDate}"]`);
     if (!target) return;
     const wrapper = els.scheduleGrid;
     const dayWidth = measureGridDayWidth();
     wrapper.scrollLeft = target.offsetLeft - (wrapper.clientWidth - dayWidth) / 2;
     updateGridRangeLabel();
-    renderTravelArrows();
   });
 }
 
@@ -1075,7 +1073,6 @@ function setupGridPanScroll() {
 
   el.addEventListener("scroll", debounce(() => {
     updateGridRangeLabel();
-    renderTravelArrows();
     onGridScrollEdge();
   }, 80));
 }
@@ -1195,69 +1192,37 @@ function formatTravelArrowLabel(prev, curr) {
   return { line, title };
 }
 
-function renderTravelArrows() {
-  const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
-  const overlay = inner?.querySelector(".grid-connectors");
-  if (!inner || !overlay) return;
+function getTeamTravelLegsForGrid(team, dates) {
+  const legs = [];
+  const sorted = getTeamEventsSorted(team);
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = sorted[i - 1];
+    const curr = sorted[i];
+    const km = getTravelKmBetween(prev, curr);
+    if (!Number.isFinite(km) || km <= 0) continue;
+    const fromIdx = dates.indexOf(prev.date);
+    const toIdx = dates.indexOf(curr.date);
+    if (fromIdx < 0 || toIdx <= fromIdx) continue;
+    legs.push({ prev, curr, fromDate: prev.date, toDate: curr.date, fromIdx, toIdx });
+  }
+  return legs;
+}
 
-  overlay.innerHTML = "";
-  const teams = getFilteredTeams();
-  const innerRect = inner.getBoundingClientRect();
-
-  teams.forEach((team) => {
-    const teamEvents = state.events
-      .filter((ev) => ev.team === team && isAssignedTeam(ev.team))
-      .sort(sortByDateThenId);
-
-    for (let i = 1; i < teamEvents.length; i += 1) {
-      const prev = teamEvents[i - 1];
-      const curr = teamEvents[i];
-      const km = getTravelKmBetween(prev, curr);
-      if (!Number.isFinite(km) || km <= 0) continue;
-
-      const prevCell = inner.querySelector(`[data-grid-team="${team}"][data-grid-date="${prev.date}"]`);
-      const currCell = inner.querySelector(`[data-grid-team="${team}"][data-grid-date="${curr.date}"]`);
-      if (!prevCell || !currCell) continue;
-
-      const pr = prevCell.getBoundingClientRect();
-      const cr = currCell.getBoundingClientRect();
-      const y = (pr.top + pr.bottom) / 2 - innerRect.top;
-      const daysGap = daysBetween(prev.date, curr.date);
-      const adjacentDay = daysGap === 1;
-
-      let x1 = pr.right - innerRect.left;
-      let x2;
-      if (adjacentDay) {
-        x2 = x1 + TRAVEL_INSET_PX;
-      } else {
-        x2 = cr.left - innerRect.left;
-        const minArrowWidth = 56;
-        if (x2 - x1 < minArrowWidth) {
-          const mid = (x1 + x2) / 2;
-          x1 = mid - minArrowWidth / 2;
-          x2 = mid + minArrowWidth / 2;
-        }
-      }
-
-      const warn = getTravelLegWarning(prev, curr, km);
-      const { line, title } = formatTravelArrowLabel(prev, curr);
-      const conn = document.createElement("div");
-      conn.className = `travel-connector${warn.overLimit ? " travel-connector-warn" : ""}${adjacentDay ? " travel-connector-adjacent" : ""}`;
-      conn.style.left = `${x1}px`;
-      conn.style.top = `${y - 14}px`;
-      conn.style.width = `${x2 - x1}px`;
-
-      const arrowLine = document.createElement("span");
-      arrowLine.className = "travel-arrow-line";
-      const label = document.createElement("span");
-      label.className = "travel-arrow-label";
-      label.textContent = line;
-      label.title = title;
-      conn.appendChild(arrowLine);
-      conn.appendChild(label);
-      overlay.appendChild(conn);
-    }
-  });
+function appendTravelLegToCell(cell, prev, curr) {
+  const km = getTravelKmBetween(prev, curr);
+  const warn = getTravelLegWarning(prev, curr, km);
+  const { line, title } = formatTravelArrowLabel(prev, curr);
+  const wrap = document.createElement("div");
+  wrap.className = `travel-leg${warn.overLimit ? " travel-leg-warn" : ""}`;
+  const arrowLine = document.createElement("span");
+  arrowLine.className = "travel-arrow-line";
+  const label = document.createElement("span");
+  label.className = "travel-arrow-label";
+  label.textContent = line;
+  label.title = title;
+  wrap.appendChild(arrowLine);
+  wrap.appendChild(label);
+  cell.appendChild(wrap);
 }
 
 function truncateChars(text, maxLen) {
@@ -1502,77 +1467,94 @@ function renderEventGrid(options = {}) {
     const eventsByDate = new Map();
     state.events.filter((e) => e.team === team).forEach((e) => eventsByDate.set(e.date, e));
 
-    for (let sub = 0; sub < GRID_SUB_ROWS; sub += 1) {
-      const tr = document.createElement("tr");
-      tr.className = `${rowClass} sub-row`;
-      tr.dataset.gridTeam = team;
+    const travelLegs = getTeamTravelLegsForGrid(team, dates);
+    const legByStartDate = new Map(travelLegs.map((leg) => [leg.fromDate, leg]));
+    const travelSpanSkip = new Set();
+    travelLegs.forEach((leg) => {
+      for (let i = leg.fromIdx + 1; i <= leg.toIdx; i += 1) {
+        travelSpanSkip.add(dates[i]);
+      }
+    });
 
-      if (sub === 0) {
-        const teamTd = document.createElement("td");
-        teamTd.className = "col-ekip team-label drop-zone";
-        teamTd.rowSpan = GRID_SUB_ROWS;
-        teamTd.textContent = team;
-        bindDropZone(teamTd, team);
-        tr.appendChild(teamTd);
+    const trTravel = document.createElement("tr");
+    trTravel.className = `${rowClass} sub-row travel-row`;
+    trTravel.dataset.gridTeam = team;
+
+    const teamTd = document.createElement("td");
+    teamTd.className = "col-ekip team-label drop-zone";
+    teamTd.rowSpan = GRID_SUB_ROWS;
+    teamTd.textContent = team;
+    bindDropZone(teamTd, team);
+    trTravel.appendChild(teamTd);
+
+    dates.forEach((date) => {
+      if (travelSpanSkip.has(date)) return;
+
+      const isToday = date === today;
+      const travelCell = document.createElement("td");
+      travelCell.className = `col-event cell-travel${isToday ? " is-today" : ""}`;
+      travelCell.dataset.gridDate = date;
+      travelCell.dataset.gridTeam = team;
+
+      const leg = legByStartDate.get(date);
+      if (leg) {
+        const span = leg.toIdx - leg.fromIdx + 1;
+        if (span > 1) travelCell.colSpan = span;
+        appendTravelLegToCell(travelCell, leg.prev, leg.curr);
+      } else {
+        travelCell.innerHTML = "&nbsp;";
       }
 
-      dates.forEach((date) => {
-        const eventOnDate = eventsByDate.get(date);
-        if (eventOnDate && sub > 0) return;
+      trTravel.appendChild(travelCell);
+    });
+    tbody.appendChild(trTravel);
 
-        const isToday = date === today;
-        const eventCell = document.createElement("td");
-        eventCell.className = `col-event cell-event drop-zone${isToday ? " is-today" : ""}`;
-        eventCell.dataset.gridDate = date;
-        eventCell.dataset.gridTeam = team;
-        bindDropZone(eventCell, team);
+    const trEvent = document.createElement("tr");
+    trEvent.className = `${rowClass} sub-row event-row`;
+    trEvent.dataset.gridTeam = team;
 
-        if (eventOnDate) {
-          eventCell.rowSpan = GRID_SUB_ROWS;
+    dates.forEach((date) => {
+      const eventOnDate = eventsByDate.get(date);
+      const isToday = date === today;
+      const eventCell = document.createElement("td");
+      eventCell.className = `col-event cell-event drop-zone${isToday ? " is-today" : ""}`;
+      eventCell.dataset.gridDate = date;
+      eventCell.dataset.gridTeam = team;
+      bindDropZone(eventCell, team);
 
-          const prevEv = getPreviousTeamEventOnGrid(team, eventOnDate.date);
-          if (prevEv && getTravelKmBetween(prevEv, eventOnDate)) {
-            eventCell.classList.add("has-travel-inset");
-            eventCell.style.setProperty("--travel-inset", `${TRAVEL_INSET_PX}px`);
-          }
+      if (eventOnDate) {
+        const block = document.createElement("div");
+        block.className = "grid-event-block";
+        makeDraggable(block, eventOnDate.id);
 
-          const block = document.createElement("div");
-          block.className = "grid-event-block";
-          makeDraggable(block, eventOnDate.id);
+        const fullVenue = eventOnDate.venue || "-";
+        const line1 = document.createElement("div");
+        line1.className = "ge-venue";
+        line1.textContent = truncateChars(fullVenue, GRID_VENUE_MAX_CHARS);
+        line1.title = fullVenue;
+        block.appendChild(line1);
 
-          const fullVenue = eventOnDate.venue || "-";
-          const line1 = document.createElement("div");
-          line1.className = "ge-venue";
-          line1.textContent = truncateChars(fullVenue, GRID_VENUE_MAX_CHARS);
-          line1.title = fullVenue;
-          block.appendChild(line1);
+        const fullCity = getEventRouteLabel(eventOnDate);
+        const line2 = document.createElement("div");
+        line2.className = "ge-route";
+        line2.textContent = fullCity;
+        line2.title = fullCity;
+        block.appendChild(line2);
 
-          const fullCity = getEventRouteLabel(eventOnDate);
-          const line2 = document.createElement("div");
-          line2.className = "ge-route";
-          line2.textContent = fullCity;
-          line2.title = fullCity;
-          block.appendChild(line2);
+        eventCell.appendChild(block);
+      } else {
+        eventCell.innerHTML = "&nbsp;";
+      }
 
-          eventCell.appendChild(block);
-        } else {
-          eventCell.innerHTML = "&nbsp;";
-        }
-
-        tr.appendChild(eventCell);
-      });
-
-      tbody.appendChild(tr);
-    }
+      trEvent.appendChild(eventCell);
+    });
+    tbody.appendChild(trEvent);
   });
 
   table.appendChild(tbody);
 
   const inner = document.createElement("div");
   inner.className = "grid-scroll-inner";
-  const connectors = document.createElement("div");
-  connectors.className = "grid-connectors";
-  inner.appendChild(connectors);
   inner.appendChild(table);
 
   els.scheduleGrid.innerHTML = "";
@@ -1581,25 +1563,22 @@ function renderEventGrid(options = {}) {
   if (options.preserveScroll && prevScroll != null) {
     els.scheduleGrid.scrollLeft = prevScroll + (options.scrollAdjust || 0);
     updateGridRangeLabel();
-    requestAnimationFrame(() => renderTravelArrows());
   } else if (!state.gridDidInitialScroll && !options.skipInitialScroll) {
     state.gridDidInitialScroll = true;
     enableGridEdgeExpandSoon();
     requestAnimationFrame(() => {
       const today = getTodayIso();
       const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
-      const target = inner?.querySelector(`[data-grid-date="${today}"]`);
+      const target = inner?.querySelector(`.cell-event[data-grid-date="${today}"]`);
       if (target) {
         const wrapper = els.scheduleGrid;
         const dayWidth = measureGridDayWidth();
         wrapper.scrollLeft = Math.max(0, target.offsetLeft - (wrapper.clientWidth - dayWidth) / 2);
       }
       updateGridRangeLabel();
-      renderTravelArrows();
     });
   } else {
     updateGridRangeLabel();
-    requestAnimationFrame(() => renderTravelArrows());
   }
 }
 
