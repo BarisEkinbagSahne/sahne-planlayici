@@ -9,6 +9,7 @@ const GRID_EDGE_THRESHOLD = 120;
 const GRID_VENUE_MAX_CHARS = 20;
 const TRAVEL_LABEL_MAX_CHARS = 15;
 const BOS_POOL_MAX_VISIBLE = 8;
+const TRAVEL_STEM_OFFSET_PX = 10;
 
 const API_BASE = "";
 
@@ -1430,6 +1431,11 @@ function renderTravelConnectors() {
       const yCurrTop = cr.top - innerRect.top + 2;
       if (x2 - x1 < 8) continue;
 
+      const span = x2 - x1;
+      const stem = Math.min(TRAVEL_STEM_OFFSET_PX, Math.max(6, span * 0.06));
+      const xOut = x1 - stem;
+      const xIn = x2 + stem;
+
       const warn = getTravelLegWarning(prev, curr, km);
       const { line, title } = formatTravelArrowLabel(prev, curr);
       const color = warn.overLimit ? "#e65100" : "#2e7d32";
@@ -1439,7 +1445,7 @@ function renderTravelConnectors() {
       path.setAttribute("class", "travel-elbow-path");
       path.setAttribute(
         "d",
-        `M ${x1} ${yPrevTop} L ${x1} ${yRail} L ${x2} ${yRail} L ${x2} ${yCurrTop}`,
+        `M ${xOut} ${yPrevTop} L ${xOut} ${yRail} L ${xIn} ${yRail} L ${xIn} ${yCurrTop}`,
       );
       path.setAttribute("fill", "none");
       path.setAttribute("stroke", color);
@@ -1452,7 +1458,7 @@ function renderTravelConnectors() {
       label.className = `travel-arrow-label${warn.overLimit ? " travel-label-warn" : ""}`;
       label.textContent = line;
       label.title = title;
-      label.style.left = `${(x1 + x2) / 2}px`;
+      label.style.left = `${(xOut + xIn) / 2}px`;
       label.style.top = `${yRail}px`;
       overlay.appendChild(label);
     }
