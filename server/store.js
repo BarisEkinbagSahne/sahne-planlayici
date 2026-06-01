@@ -4,14 +4,26 @@ import { Redis } from "@upstash/redis";
 
 const REDIS_KEY = "sahne:store:v1";
 
+function envTrim(key) {
+  const v = process.env[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
 export function createDataStore({ dataFile, defaultStore }) {
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-  const redis = redisUrl && redisToken
-    ? new Redis({ url: redisUrl, token: redisToken })
-    : null;
+  const redisUrl = envTrim("UPSTASH_REDIS_REST_URL");
+  const redisToken = envTrim("UPSTASH_REDIS_REST_TOKEN");
+  let redis =
+    redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
+  let mode = redis ? "redis" : "file";
 
   let writeQueue = Promise.resolve();
+
+  function disableRedis(reason) {
+    if (!redis) return;
+    console.error(`Redis kullanilamiyor (${reason}). Dosya depolamasina geciliyor.`);
+    redis = null;
+    mode = "file";
+  }
 
   async function ensureFile() {
     await fs.mkdir(path.dirname(dataFile), { recursive: true });
@@ -32,8 +44,7 @@ export function createDataStore({ dataFile, defaultStore }) {
   }
 
   async function readRedisStore() {
-    const data = await redis.get(REDIS_KEY);
-    return data || null;
+    return redis.get(REDIS_KEY);
   }
 
   async function writeRedisStore(store) {
@@ -55,7 +66,9 @@ export function createDataStore({ dataFile, defaultStore }) {
   }
 
   return {
-    mode: redis ? "redis" : "file",
+    get mode() {
+      return mode;
+    },
 
     async init() {
       await ensureFile();
@@ -63,26 +76,34 @@ export function createDataStore({ dataFile, defaultStore }) {
         console.log("Depolama: yerel dosya (gelistirme modu)");
         return;
       }
-      const existing = await readRedisStore();
-      if (existing) {
+      try {
+        const existing = await readRedisStore();
+        if (existing) {
+          console.log("Depolama: Upstash Redis (kalici)");
+          return;
+        }
+        const migrated = await migrateFileToRedisIfNeeded();
+        if (!migrated) {
+          await writeRedisStore(defaultStore);
+        }
         console.log("Depolama: Upstash Redis (kalici)");
-        return;
+      } catch (err) {
+        disableRedis(err.message || "baglanti hatasi");
       }
-      const migrated = await migrateFileToRedisIfNeeded();
-      if (!migrated) {
-        await writeRedisStore(defaultStore);
-      }
-      console.log("Depolama: Upstash Redis (kalici)");
     },
 
     async read() {
       if (redis) {
-        const data = await readRedisStore();
-        if (data) return data;
-        const migrated = await migrateFileToRedisIfNeeded();
-        if (migrated) return migrated;
-        await writeRedisStore(defaultStore);
-        return structuredClone(defaultStore);
+        try {
+          const data = await readRedisStore();
+          if (data) return data;
+          const migrated = await migrateFileToRedisIfNeeded();
+          if (migrated) return migrated;
+          await writeRedisStore(defaultStore);
+          return structuredClone(defaultStore);
+        } catch (err) {
+          disableRedis(err.message || "okuma hatasi");
+        }
       }
       return readFileStore();
     },
@@ -90,8 +111,12 @@ export function createDataStore({ dataFile, defaultStore }) {
     queueWrite(store) {
       writeQueue = writeQueue.then(async () => {
         if (redis) {
-          await writeRedisStore(store);
-          return;
+          try {
+            await writeRedisStore(store);
+            return;
+          } catch (err) {
+            disableRedis(err.message || "yazma hatasi");
+          }
         }
         await writeFileStore(store);
       });

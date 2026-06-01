@@ -214,7 +214,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-await dataStore.init();
+await dataStore.init().catch((err) => {
+  console.error("Depolama baslatilamadi:", err);
+});
 server.listen(PORT, () => {
   console.log(`Sahne Lojistik sunucusu http://localhost:${PORT} adresinde calisiyor`);
   if (dataStore.mode === "file" && process.env.RENDER) {
