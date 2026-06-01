@@ -580,6 +580,22 @@ td {
   border-radius: 8px;
   cursor: grab;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #8aa8e8 #eef2fb;
+}
+
+.schedule-grid-wrapper::-webkit-scrollbar {
+  height: 12px;
+}
+
+.schedule-grid-wrapper::-webkit-scrollbar-track {
+  background: #eef2fb;
+  border-radius: 0 0 8px 8px;
+}
+
+.schedule-grid-wrapper::-webkit-scrollbar-thumb {
+  background: #8aa8e8;
+  border-radius: 6px;
 }
 
 .schedule-grid-wrapper.is-panning {

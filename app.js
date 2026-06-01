@@ -6,7 +6,8 @@ const GRID_SUB_ROWS = 2;
 const MAX_GRID_DAYS = 42;
 const GRID_EXPAND_DAYS = 7;
 const GRID_EDGE_THRESHOLD = 120;
-const GRID_NAV_STEP_DAYS = 7;
+const GRID_NAV_STEP_DAYS = 1;
+const GRID_VISIBLE_DAYS = 21;
 const GRID_WEEK_DAYS = 7;
 const GRID_VENUE_MAX_CHARS = 20;
 const TRAVEL_LABEL_MAX_CHARS = 15;
@@ -1015,11 +1016,15 @@ function getTodayIso() {
   return isoFromDate(new Date());
 }
 
-function centerGridOnDate(isoDate) {
-  const anchor = isoDate || getTodayIso();
-  const half = Math.floor(MAX_GRID_DAYS / 2);
+function setGridRangeAround(anchorIso, totalDays) {
+  const anchor = anchorIso || getTodayIso();
+  const half = Math.floor(totalDays / 2);
   state.gridStartDate = addDaysToIso(anchor, -half);
-  state.gridEndDate = addDaysToIso(anchor, MAX_GRID_DAYS - half - 1);
+  state.gridEndDate = addDaysToIso(anchor, totalDays - half - 1);
+}
+
+function centerGridOnDate(isoDate) {
+  setGridRangeAround(isoDate, GRID_VISIBLE_DAYS);
 }
 
 function dateInGridRange(isoDate) {
@@ -1089,11 +1094,6 @@ function getWeekStartMonday(isoDate) {
   return isoFromDate(d);
 }
 
-function isGridWeekMode() {
-  if (!state.gridStartDate || !state.gridEndDate) return false;
-  return daysBetween(state.gridStartDate, state.gridEndDate) < GRID_WEEK_DAYS;
-}
-
 function lockGridNavigation() {
   state.gridNavLockUntil = Date.now() + 1000;
   state.gridEdgeExpandEnabled = false;
@@ -1135,9 +1135,7 @@ function scrollToGridColumn(isoDate) {
 
 function focusGridThisWeek() {
   const today = getTodayIso();
-  const weekStart = getWeekStartMonday(today);
-  state.gridStartDate = weekStart;
-  state.gridEndDate = addDaysToIso(weekStart, GRID_WEEK_DAYS - 1);
+  setGridRangeAround(today, GRID_VISIBLE_DAYS);
   state.gridDidInitialScroll = true;
   lockGridNavigation();
   renderEventGrid({ skipInitialScroll: true });
@@ -1146,11 +1144,18 @@ function focusGridThisWeek() {
 
 function navigateGridWindow(dayDelta) {
   initGridRange();
+  const wrapper = els.scheduleGrid;
+  const dayWidth = measureGridDayWidth();
+  const prevScroll = wrapper.scrollLeft;
   state.gridStartDate = addDaysToIso(state.gridStartDate, dayDelta);
   state.gridEndDate = addDaysToIso(state.gridEndDate, dayDelta);
   lockGridNavigation();
-  renderEventGrid({ skipInitialScroll: true });
-  scrollToGridColumn(state.gridStartDate);
+  renderEventGrid({
+    preserveScroll: true,
+    prevScroll,
+    scrollAdjust: -dayDelta * dayWidth,
+    skipInitialScroll: true,
+  });
 }
 
 function scrollGridToDate(isoDate) {
@@ -1174,7 +1179,6 @@ let gridExpanding = false;
 function onGridScrollEdge() {
   if (Date.now() < state.gridNavLockUntil) return;
   if (!state.gridEdgeExpandEnabled || gridExpanding) return;
-  if (isGridWeekMode()) return;
   if (!gridHasHorizontalScroll()) return;
 
   const wrapper = els.scheduleGrid;
@@ -1221,9 +1225,7 @@ function setupGridPanScroll() {
 
   window.addEventListener("mousemove", (e) => {
     if (!panning) return;
-    if (gridHasHorizontalScroll()) {
-      el.scrollLeft = startScroll - (e.pageX - startX);
-    }
+    el.scrollLeft = startScroll - (e.pageX - startX);
   });
 
   window.addEventListener("mouseup", (e) => {
