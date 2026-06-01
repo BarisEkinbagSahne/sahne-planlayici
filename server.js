@@ -214,12 +214,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-await dataStore.init().catch((err) => {
-  console.error("Depolama baslatilamadi:", err);
-});
+await dataStore.prepare();
 server.listen(PORT, () => {
   console.log(`Sahne Lojistik sunucusu http://localhost:${PORT} adresinde calisiyor`);
   if (dataStore.mode === "file" && process.env.RENDER) {
     console.warn("UYARI: Kalici depolama yok! Render ortam degiskenlerine Upstash Redis ekleyin.");
   }
+  dataStore.init().catch((err) => {
+    console.error("Redis baslatma:", err);
+  });
 });

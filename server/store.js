@@ -3,18 +3,40 @@ import path from "node:path";
 import { Redis } from "@upstash/redis";
 
 const REDIS_KEY = "sahne:store:v1";
+const REDIS_TIMEOUT_MS = 8000;
 
 function envTrim(key) {
   const v = process.env[key];
   return typeof v === "string" ? v.trim() : "";
 }
 
+function withTimeout(promise, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(
+        () => reject(new Error(`${label} (${REDIS_TIMEOUT_MS}ms)`)),
+        REDIS_TIMEOUT_MS,
+      );
+    }),
+  ]);
+}
+
 export function createDataStore({ dataFile, defaultStore }) {
   const redisUrl = envTrim("UPSTASH_REDIS_REST_URL");
   const redisToken = envTrim("UPSTASH_REDIS_REST_TOKEN");
+  const redisUrlOk = redisUrl.startsWith("https://");
   let redis =
-    redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
+    redisUrl && redisToken && redisUrlOk
+      ? new Redis({ url: redisUrl, token: redisToken })
+      : null;
   let mode = redis ? "redis" : "file";
+
+  if (redisUrl && redisToken && !redisUrlOk) {
+    console.error(
+      "UPSTASH_REDIS_REST_URL https:// ile baslamali (REST adresi). redis:// kullanmayin.",
+    );
+  }
 
   let writeQueue = Promise.resolve();
 
@@ -44,11 +66,11 @@ export function createDataStore({ dataFile, defaultStore }) {
   }
 
   async function readRedisStore() {
-    return redis.get(REDIS_KEY);
+    return withTimeout(redis.get(REDIS_KEY), "Redis okuma");
   }
 
   async function writeRedisStore(store) {
-    await redis.set(REDIS_KEY, store);
+    await withTimeout(redis.set(REDIS_KEY, store), "Redis yazma");
   }
 
   async function migrateFileToRedisIfNeeded() {
@@ -70,10 +92,15 @@ export function createDataStore({ dataFile, defaultStore }) {
       return mode;
     },
 
-    async init() {
+    /** Hizli; sunucu dinlemeden once calistirilir. */
+    async prepare() {
       await ensureFile();
+    },
+
+    /** Redis baglantisi; arka planda calisabilir. */
+    async init() {
       if (!redis) {
-        console.log("Depolama: yerel dosya (gelistirme modu)");
+        console.log("Depolama: yerel dosya");
         return;
       }
       try {
