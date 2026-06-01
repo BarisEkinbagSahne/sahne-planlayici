@@ -81,12 +81,16 @@ async function bootstrap() {
     setSyncStatus("Sunucu ile senkron", "ok");
 
     if (state.events.some((e) => isAssignedTeam(e.team))) {
-      recalculateTravelLegs()
-        .then(async () => {
-          await persistState();
-          renderEventsView();
-        })
-        .catch(() => {});
+      setSyncStatus("Yol km hesaplaniyor...", "info");
+      try {
+        await recalculateTravelLegs();
+        await persistState();
+        renderEventsView();
+        setSyncStatus("Sunucu ile senkron", "ok");
+      } catch (err) {
+        console.error(err);
+        setSyncStatus("Sunucu ile senkron (km kismen)", "warn");
+      }
     }
 
     if (new URLSearchParams(window.location.search).get("recalculate") === "1") {
@@ -759,26 +763,115 @@ function getNextTeamEvent(team, date, excludeEventId) {
   return findClosestAfter(sameTeam, date);
 }
 
-async function getRoadDistanceKm(cityA, cityB) {
-  const key = makePairKey(cityA, cityB);
-  if (state.roadCache[key] != null) return state.roadCache[key];
-  const a = await geocodeCity(cityA);
-  const b = await geocodeCity(cityB);
-  const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`OSRM hatasi: ${res.status}`);
-  const data = await res.json();
-  if (!data.routes || !data.routes.length) throw new Error(`Karayolu mesafesi bulunamadi: ${cityA}-${cityB}`);
-  const km = data.routes[0].distance / 1000;
+function resolveCityDisplayName(city) {
+  const norm = normalizeCityName(city);
+  const lower = norm.toLowerCase();
+  const hit = TURKIYE_SEHIRLERI.find((c) => c.toLowerCase() === lower);
+  return hit || norm;
+}
+
+function getCachedCityCoords(city) {
+  const key = resolveCityDisplayName(city).toLowerCase();
+  return state.geoCache[key] || null;
+}
+
+function haversineKmBetweenCoords(a, b) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLon = Math.sin(dLon / 2);
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function estimateRoadKmSync(cityA, cityB) {
+  const aName = resolveCityDisplayName(cityA);
+  const bName = resolveCityDisplayName(cityB);
+  const key = makePairKey(aName, bName);
+  const cached = state.roadCache[key];
+  if (Number.isFinite(cached) && cached >= 0) return cached;
+  if (aName.toLowerCase() === bName.toLowerCase()) {
+    state.roadCache[key] = 0;
+    return 0;
+  }
+  const ca = getCachedCityCoords(aName);
+  const cb = getCachedCityCoords(bName);
+  if (!ca || !cb) return null;
+  const km = Math.round(haversineKmBetweenCoords(ca, cb) * 1.28);
   state.roadCache[key] = km;
   return km;
 }
 
+async function estimateRoadKmAsync(cityA, cityB) {
+  const sync = estimateRoadKmSync(cityA, cityB);
+  if (Number.isFinite(sync)) return sync;
+  const aName = resolveCityDisplayName(cityA);
+  const bName = resolveCityDisplayName(cityB);
+  if (aName.toLowerCase() === bName.toLowerCase()) return 0;
+  const a = await geocodeCity(aName);
+  const b = await geocodeCity(bName);
+  const km = Math.round(haversineKmBetweenCoords(a, b) * 1.28);
+  state.roadCache[makePairKey(aName, bName)] = km;
+  return km;
+}
+
+function applyTravelLegFields(curr, prev, km) {
+  const liters = (km / 100) * FUEL_LITER_PER_100KM;
+  const price = toPositiveNumber(curr.fuelPricePerLiter, state.defaultFuelPrice);
+  curr.travelKmFromPrev = km;
+  curr.travelFuelLiterFromPrev = liters;
+  curr.travelFuelCostFromPrev = liters * price;
+  const days = daysBetween(prev.date, curr.date);
+  curr.travelDaysFromPrev = days;
+  curr.travelLegOverLimit = days > 0 && km > days * DAILY_KM_LIMIT;
+  curr.travelLegWarning = curr.travelLegOverLimit
+    ? `${days} gunde izin ${days * DAILY_KM_LIMIT} km, gidilen ${Math.round(km)} km`
+    : "";
+}
+
+async function getRoadDistanceKm(cityA, cityB) {
+  const aName = resolveCityDisplayName(cityA);
+  const bName = resolveCityDisplayName(cityB);
+  const key = makePairKey(aName, bName);
+  if (state.roadCache[key] != null) return state.roadCache[key];
+  if (aName.toLowerCase() === bName.toLowerCase()) {
+    state.roadCache[key] = 0;
+    return 0;
+  }
+  const a = await geocodeCity(aName);
+  const b = await geocodeCity(bName);
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`OSRM hatasi: ${res.status}`);
+    const data = await res.json();
+    if (!data.routes || !data.routes.length) {
+      throw new Error(`Karayolu mesafesi bulunamadi: ${aName}-${bName}`);
+    }
+    const km = data.routes[0].distance / 1000;
+    state.roadCache[key] = km;
+    return km;
+  } catch (err) {
+    const est = estimateRoadKmSync(aName, bName);
+    if (Number.isFinite(est)) return est;
+    throw err;
+  }
+}
+
 async function geocodeCity(city) {
-  const key = city.toLowerCase();
+  const name = resolveCityDisplayName(city);
+  const key = name.toLowerCase();
   if (state.geoCache[key]) return state.geoCache[key];
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=${encodeURIComponent(city)}`;
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=${encodeURIComponent(name)}`;
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "SahneLojistikPlanlayici/1.0 (sahne-lojistik)",
+    },
+  });
   if (!res.ok) throw new Error(`Koordinat alinamadi: ${city}`);
   const list = await res.json();
   if (!list.length) throw new Error(`Sehir bulunamadi: ${city}`);
@@ -1098,19 +1191,16 @@ async function recalculateTravelLegs() {
       try {
         const from = getEventEndCity(prev);
         const to = curr.destination;
-        const km = await getRoadDistanceKm(from, to);
-        const liters = (km / 100) * FUEL_LITER_PER_100KM;
-        const price = toPositiveNumber(curr.fuelPricePerLiter, state.defaultFuelPrice);
-        curr.travelKmFromPrev = km;
-        curr.travelFuelLiterFromPrev = liters;
-        curr.travelFuelCostFromPrev = liters * price;
-        const days = daysBetween(prev.date, curr.date);
-        curr.travelDaysFromPrev = days;
-        curr.travelLegOverLimit = days > 0 && km > days * DAILY_KM_LIMIT;
-        curr.travelLegWarning = curr.travelLegOverLimit
-          ? `${days} gunde izin ${days * DAILY_KM_LIMIT} km, gidilen ${Math.round(km)} km`
-          : "";
-      } catch {
+        let km;
+        try {
+          km = await getRoadDistanceKm(from, to);
+        } catch {
+          km = await estimateRoadKmAsync(from, to);
+        }
+        if (!Number.isFinite(km) || km < 0) throw new Error("Km hesaplanamadi");
+        applyTravelLegFields(curr, prev, km);
+      } catch (err) {
+        console.warn("Yol km:", prev.date, "->", curr.date, err.message || err);
         curr.travelKmFromPrev = null;
         curr.travelFuelLiterFromPrev = null;
         curr.travelFuelCostFromPrev = null;
@@ -1128,14 +1218,44 @@ function getTravelKmBetween(prev, curr) {
   }
   const from = getEventEndCity(prev);
   const to = curr.destination;
-  const key = makePairKey(from, to);
-  const cached = state.roadCache[key];
+  const cached = estimateRoadKmSync(from, to);
   if (Number.isFinite(cached) && cached > 0) return cached;
   if (Number.isFinite(curr.avgKm) && curr.avgKm > 0) {
     const start = getStartCityForCandidate(curr, curr.id);
-    if (start === from) return curr.avgKm;
+    if (resolveCityDisplayName(start) === resolveCityDisplayName(from)) return curr.avgKm;
   }
   return null;
+}
+
+let travelLegRefreshTimer = null;
+
+function teamEventsMissingTravelKm() {
+  for (const team of state.teams) {
+    const sorted = getTeamEventsSorted(team);
+    for (let i = 1; i < sorted.length; i += 1) {
+      const km = getTravelKmBetween(sorted[i - 1], sorted[i]);
+      if (!Number.isFinite(km) || km <= 0) return true;
+    }
+  }
+  return false;
+}
+
+function scheduleTravelLegRefresh() {
+  if (!state.events.some((e) => isAssignedTeam(e.team))) return;
+  clearTimeout(travelLegRefreshTimer);
+  travelLegRefreshTimer = setTimeout(async () => {
+    if (!teamEventsMissingTravelKm()) return;
+    const prevScroll = els.scheduleGrid.scrollLeft;
+    try {
+      await recalculateTravelLegs();
+      await persistState();
+      if (state.eventView === "grid") {
+        renderEventGrid({ preserveScroll: true, prevScroll, skipInitialScroll: true });
+      }
+    } catch (err) {
+      console.error("Yol km yenileme:", err);
+    }
+  }, 400);
 }
 
 function getTravelFuelBetween(prev, curr, km) {
@@ -1580,6 +1700,8 @@ function renderEventGrid(options = {}) {
   } else {
     updateGridRangeLabel();
   }
+
+  scheduleTravelLegRefresh();
 }
 
 bootstrap().catch((err) => console.error(err));
