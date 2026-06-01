@@ -41,6 +41,7 @@ const state = {
   gridEndDate: null,
   gridDidInitialScroll: false,
   gridEdgeExpandEnabled: false,
+  gridNavLockUntil: 0,
   defaultFuelPrice: DEFAULT_FUEL_PRICE,
   bubiletUrl: "",
 };
@@ -1088,27 +1089,68 @@ function getWeekStartMonday(isoDate) {
   return isoFromDate(d);
 }
 
+function isGridWeekMode() {
+  if (!state.gridStartDate || !state.gridEndDate) return false;
+  return daysBetween(state.gridStartDate, state.gridEndDate) < GRID_WEEK_DAYS;
+}
+
+function lockGridNavigation() {
+  state.gridNavLockUntil = Date.now() + 1000;
+  state.gridEdgeExpandEnabled = false;
+  setTimeout(() => {
+    state.gridEdgeExpandEnabled = true;
+  }, 1000);
+}
+
+function gridHasHorizontalScroll() {
+  const wrapper = els.scheduleGrid;
+  return wrapper && wrapper.scrollWidth > wrapper.clientWidth + 24;
+}
+
+function scrollToGridColumn(isoDate) {
+  requestAnimationFrame(() => {
+    const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
+    const wrapper = els.scheduleGrid;
+    if (!inner || !wrapper) return;
+
+    const target = inner.querySelector(`th.date-header[data-grid-date="${isoDate}"]`)
+      || inner.querySelector(`.cell-event[data-grid-date="${isoDate}"]`);
+    if (!target) {
+      wrapper.scrollLeft = 0;
+      updateGridRangeLabel();
+      renderTravelConnectors();
+      return;
+    }
+
+    const dayWidth = measureGridDayWidth();
+    const safeLeft = gridHasHorizontalScroll() ? GRID_EDGE_THRESHOLD + 16 : 0;
+    wrapper.scrollLeft = Math.max(
+      safeLeft,
+      target.offsetLeft - Math.max(0, (wrapper.clientWidth - dayWidth) / 2),
+    );
+    updateGridRangeLabel();
+    renderTravelConnectors();
+  });
+}
+
 function focusGridThisWeek() {
   const today = getTodayIso();
   const weekStart = getWeekStartMonday(today);
   state.gridStartDate = weekStart;
   state.gridEndDate = addDaysToIso(weekStart, GRID_WEEK_DAYS - 1);
   state.gridDidInitialScroll = true;
+  lockGridNavigation();
   renderEventGrid({ skipInitialScroll: true });
-  requestAnimationFrame(() => {
-    scrollGridToDate(today);
-    renderTravelConnectors();
-  });
+  scrollToGridColumn(today);
 }
 
 function navigateGridWindow(dayDelta) {
   initGridRange();
-  shiftGridWindow(dayDelta);
+  state.gridStartDate = addDaysToIso(state.gridStartDate, dayDelta);
+  state.gridEndDate = addDaysToIso(state.gridEndDate, dayDelta);
+  lockGridNavigation();
   renderEventGrid({ skipInitialScroll: true });
-  requestAnimationFrame(() => {
-    scrollGridToDate(state.gridStartDate);
-    renderTravelConnectors();
-  });
+  scrollToGridColumn(state.gridStartDate);
 }
 
 function scrollGridToDate(isoDate) {
@@ -1117,16 +1159,7 @@ function scrollGridToDate(isoDate) {
     centerGridOnDate(isoDate);
     renderEventGrid({ skipInitialScroll: true });
   }
-  requestAnimationFrame(() => {
-    const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
-    const target = inner?.querySelector(`.cell-event[data-grid-date="${isoDate}"]`);
-    if (!target) return;
-    const wrapper = els.scheduleGrid;
-    const dayWidth = measureGridDayWidth();
-    wrapper.scrollLeft = Math.max(0, target.offsetLeft - (wrapper.clientWidth - dayWidth) / 2);
-    updateGridRangeLabel();
-    renderTravelConnectors();
-  });
+  scrollToGridColumn(isoDate);
 }
 
 function enableGridEdgeExpandSoon() {
@@ -1139,7 +1172,11 @@ function enableGridEdgeExpandSoon() {
 let gridExpanding = false;
 
 function onGridScrollEdge() {
+  if (Date.now() < state.gridNavLockUntil) return;
   if (!state.gridEdgeExpandEnabled || gridExpanding) return;
+  if (isGridWeekMode()) return;
+  if (!gridHasHorizontalScroll()) return;
+
   const wrapper = els.scheduleGrid;
   const edge = GRID_EDGE_THRESHOLD;
   const dayWidth = measureGridDayWidth();
@@ -1171,6 +1208,7 @@ function setupGridPanScroll() {
   let panning = false;
   let startX = 0;
   let startScroll = 0;
+  const SWIPE_PX = 72;
 
   el.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
@@ -1183,13 +1221,20 @@ function setupGridPanScroll() {
 
   window.addEventListener("mousemove", (e) => {
     if (!panning) return;
-    el.scrollLeft = startScroll - (e.pageX - startX);
+    if (gridHasHorizontalScroll()) {
+      el.scrollLeft = startScroll - (e.pageX - startX);
+    }
   });
 
-  window.addEventListener("mouseup", () => {
+  window.addEventListener("mouseup", (e) => {
     if (!panning) return;
     panning = false;
     el.classList.remove("is-panning");
+    if (gridHasHorizontalScroll()) return;
+
+    const dx = e.pageX - startX;
+    if (Math.abs(dx) < SWIPE_PX) return;
+    navigateGridWindow(dx < 0 ? GRID_NAV_STEP_DAYS : -GRID_NAV_STEP_DAYS);
   });
 
   el.addEventListener("touchstart", (e) => {
