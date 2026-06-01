@@ -81,6 +81,10 @@ async function bootstrap() {
     setSyncStatus("Sunucu ile senkron", "ok");
 
     if (state.events.some((e) => isAssignedTeam(e.team))) {
+      if (materializeTravelLegEstimates()) {
+        renderEventsView();
+        persistState().catch(() => {});
+      }
       setSyncStatus("Yol km hesaplaniyor...", "info");
       try {
         await recalculateTravelLegs();
@@ -89,7 +93,11 @@ async function bootstrap() {
         setSyncStatus("Sunucu ile senkron", "ok");
       } catch (err) {
         console.error(err);
-        setSyncStatus("Sunucu ile senkron (km kismen)", "warn");
+        if (materializeTravelLegEstimates()) {
+          await persistState();
+          renderEventsView();
+        }
+        setSyncStatus("Sunucu ile senkron (tahmini km)", "warn");
       }
     }
 
@@ -772,7 +780,7 @@ function resolveCityDisplayName(city) {
 
 function getCachedCityCoords(city) {
   const key = resolveCityDisplayName(city).toLowerCase();
-  return state.geoCache[key] || null;
+  return state.geoCache[key] || window.CITY_COORDS?.[key] || null;
 }
 
 function haversineKmBetweenCoords(a, b) {
@@ -1227,13 +1235,37 @@ function getTravelKmBetween(prev, curr) {
   return null;
 }
 
+function resolveTravelKmForDisplay(prev, curr) {
+  const km = getTravelKmBetween(prev, curr);
+  if (Number.isFinite(km) && km > 0) return km;
+  const est = estimateRoadKmSync(getEventEndCity(prev), curr.destination);
+  return Number.isFinite(est) && est > 0 ? est : null;
+}
+
+function materializeTravelLegEstimates() {
+  let changed = false;
+  for (const team of state.teams) {
+    const sorted = getTeamEventsSorted(team);
+    for (let i = 1; i < sorted.length; i += 1) {
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      if (Number.isFinite(curr.travelKmFromPrev) && curr.travelKmFromPrev > 0) continue;
+      const km = resolveTravelKmForDisplay(prev, curr);
+      if (!km) continue;
+      applyTravelLegFields(curr, prev, km);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 let travelLegRefreshTimer = null;
 
 function teamEventsMissingTravelKm() {
   for (const team of state.teams) {
     const sorted = getTeamEventsSorted(team);
     for (let i = 1; i < sorted.length; i += 1) {
-      const km = getTravelKmBetween(sorted[i - 1], sorted[i]);
+      const km = resolveTravelKmForDisplay(sorted[i - 1], sorted[i]);
       if (!Number.isFinite(km) || km <= 0) return true;
     }
   }
@@ -1247,6 +1279,13 @@ function scheduleTravelLegRefresh() {
     if (!teamEventsMissingTravelKm()) return;
     const prevScroll = els.scheduleGrid.scrollLeft;
     try {
+      if (materializeTravelLegEstimates()) {
+        if (state.eventView === "grid") {
+          renderEventGrid({ preserveScroll: true, prevScroll, skipInitialScroll: true });
+        }
+        await persistState();
+      }
+      if (!teamEventsMissingTravelKm()) return;
       await recalculateTravelLegs();
       await persistState();
       if (state.eventView === "grid") {
@@ -1254,6 +1293,12 @@ function scheduleTravelLegRefresh() {
       }
     } catch (err) {
       console.error("Yol km yenileme:", err);
+      if (materializeTravelLegEstimates()) {
+        await persistState();
+        if (state.eventView === "grid") {
+          renderEventGrid({ preserveScroll: true, prevScroll, skipInitialScroll: true });
+        }
+      }
     }
   }, 400);
 }
@@ -1286,7 +1331,7 @@ function getTravelLegWarning(prev, curr, km) {
 }
 
 function formatTravelArrowLabel(prev, curr) {
-  const km = getTravelKmBetween(prev, curr);
+  const km = resolveTravelKmForDisplay(prev, curr);
   if (!Number.isFinite(km) || km <= 0) {
     return { line: "", title: "" };
   }
@@ -1318,12 +1363,23 @@ function getTeamTravelLegsForGrid(team, dates) {
   for (let i = 1; i < sorted.length; i += 1) {
     const prev = sorted[i - 1];
     const curr = sorted[i];
-    const km = getTravelKmBetween(prev, curr);
+    const km = resolveTravelKmForDisplay(prev, curr);
     if (!Number.isFinite(km) || km <= 0) continue;
     const fromIdx = dates.indexOf(prev.date);
     const toIdx = dates.indexOf(curr.date);
-    if (fromIdx < 0 || toIdx <= fromIdx) continue;
-    legs.push({ prev, curr, fromDate: prev.date, toDate: curr.date, fromIdx, toIdx });
+    if (toIdx < 0) continue;
+    const startIdx = fromIdx >= 0 ? fromIdx : toIdx;
+    if (fromIdx >= 0 && toIdx <= fromIdx) continue;
+    const span = fromIdx >= 0 ? toIdx - fromIdx + 1 : 1;
+    legs.push({
+      prev,
+      curr,
+      startDate: dates[startIdx],
+      toDate: curr.date,
+      fromIdx: startIdx,
+      toIdx,
+      span,
+    });
   }
   return legs;
 }
@@ -1543,6 +1599,7 @@ function renderBosPool() {
 }
 
 function renderEventGrid(options = {}) {
+  materializeTravelLegEstimates();
   initGridRange();
   const dates = getGridDates();
   const teams = getFilteredTeams();
@@ -1588,7 +1645,7 @@ function renderEventGrid(options = {}) {
     state.events.filter((e) => e.team === team).forEach((e) => eventsByDate.set(e.date, e));
 
     const travelLegs = getTeamTravelLegsForGrid(team, dates);
-    const legByStartDate = new Map(travelLegs.map((leg) => [leg.fromDate, leg]));
+    const legByStartDate = new Map(travelLegs.map((leg) => [leg.startDate, leg]));
     const travelSpanSkip = new Set();
     travelLegs.forEach((leg) => {
       for (let i = leg.fromIdx + 1; i <= leg.toIdx; i += 1) {
@@ -1618,8 +1675,7 @@ function renderEventGrid(options = {}) {
 
       const leg = legByStartDate.get(date);
       if (leg) {
-        const span = leg.toIdx - leg.fromIdx + 1;
-        if (span > 1) travelCell.colSpan = span;
+        if (leg.span > 1) travelCell.colSpan = leg.span;
         appendTravelLegToCell(travelCell, leg.prev, leg.curr);
       } else {
         travelCell.innerHTML = "&nbsp;";
