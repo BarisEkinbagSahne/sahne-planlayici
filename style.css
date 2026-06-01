@@ -7,6 +7,7 @@ body {
   font-family: Arial, sans-serif;
   background: #f5f7fb;
   color: #1d2430;
+  overflow-x: hidden;
 }
 
 .app-header {
@@ -49,6 +50,8 @@ body {
 
 .card-wide {
   grid-column: 1 / -1;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 h2,
@@ -513,7 +516,9 @@ td {
 }
 
 .schedule-panel {
-  overflow: hidden;
+  overflow: visible;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .grid-nav {
@@ -574,6 +579,9 @@ td {
 }
 
 .schedule-grid-wrapper {
+  display: block;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid #c8d3ea;
@@ -581,7 +589,8 @@ td {
   cursor: grab;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: #8aa8e8 #eef2fb;
+  scrollbar-color: #5b7fd6 #eef2fb;
+  isolation: isolate;
 }
 
 .schedule-grid-wrapper::-webkit-scrollbar {
@@ -698,9 +707,16 @@ td {
 .schedule-grid .col-ekip {
   width: 108px;
   min-width: 108px;
+  max-width: 108px;
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: 3;
+  box-shadow: 2px 0 6px rgba(26, 40, 72, 0.08);
+}
+
+.schedule-grid thead th.col-ekip {
+  z-index: 8;
+  background: #eef2fb !important;
 }
 
 .schedule-grid .col-event {
@@ -801,12 +817,12 @@ td {
 .grid-row-diger2 { background: #ebe0ff; }
 .grid-row-default { background: #f0f4fa; }
 
-.grid-row-bcs .team-label { background: #c5e0ff; }
-.grid-row-baris .team-label { background: #ffd0e3; }
-.grid-row-barkin .team-label { background: #ffeeb0; }
-.grid-row-diger .team-label { background: #c8eed0; }
-.grid-row-diger2 .team-label { background: #ddd0ff; }
-.grid-row-default .team-label { background: #e4eaf4; }
+.grid-row-bcs .col-ekip { background: #c5e0ff; }
+.grid-row-baris .col-ekip { background: #ffd0e3; }
+.grid-row-barkin .col-ekip { background: #ffeeb0; }
+.grid-row-diger .col-ekip { background: #c8eed0; }
+.grid-row-diger2 .col-ekip { background: #ddd0ff; }
+.grid-row-default .col-ekip { background: #e4eaf4; }
 
 .event-card {
   border: 1px solid #8aa8e8;
