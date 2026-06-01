@@ -1432,9 +1432,13 @@ function renderTravelConnectors() {
       if (x2 - x1 < 8) continue;
 
       const span = x2 - x1;
-      const stem = Math.min(TRAVEL_STEM_OFFSET_PX, Math.max(6, span * 0.06));
-      const xOut = x1 - stem;
-      const xIn = x2 + stem;
+      const stem = Math.min(TRAVEL_STEM_OFFSET_PX, Math.max(5, span * 0.04));
+      const prevHasIncoming = i >= 2;
+      const currHasOutgoing = i < sorted.length - 1;
+      let xOut = x1;
+      let xIn = x2;
+      if (prevHasIncoming) xOut = x1 + stem;
+      if (currHasOutgoing) xIn = x2 - stem;
 
       const warn = getTravelLegWarning(prev, curr, km);
       const { line, title } = formatTravelArrowLabel(prev, curr);
