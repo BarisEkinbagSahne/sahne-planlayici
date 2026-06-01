@@ -6,6 +6,9 @@ const GRID_SUB_ROWS = 2;
 const MAX_GRID_DAYS = 42;
 const GRID_EXPAND_DAYS = 7;
 const GRID_EDGE_THRESHOLD = 120;
+const GRID_VENUE_MAX_CHARS = 20;
+const TRAVEL_LABEL_MAX_CHARS = 15;
+const TRAVEL_INSET_PX = 92;
 
 const API_BASE = "";
 
@@ -1167,20 +1170,29 @@ function getTravelLegWarning(prev, curr, km) {
 
 function formatTravelArrowLabel(prev, curr) {
   const km = getTravelKmBetween(prev, curr);
-  if (!Number.isFinite(km) || km <= 0) return "";
-  const fuel = getTravelFuelBetween(prev, curr, km);
-  let mazot = "-";
-  if (Number.isFinite(fuel.cost)) {
-    mazot = `${fuel.cost.toFixed(0)} TL`;
-    if (Number.isFinite(fuel.liters)) mazot += ` · ${fuel.liters.toFixed(1)} L`;
+  if (!Number.isFinite(km) || km <= 0) {
+    return { line: "", title: "" };
   }
-  const warn =
-    curr.travelLegWarning ||
-    (curr.travelLegOverLimit ? getTravelLegWarning(prev, curr, km).text : "");
-  const warnHtml = warn
-    ? `<span class="travel-arrow-warn">UYARI: ${warn}</span>`
-    : "";
-  return `<span class="travel-arrow-title">Gidilen Km</span><strong>${Math.round(km)} km</strong><span class="travel-arrow-mazot">${mazot}</span>${warnHtml}`;
+  const fuel = getTravelFuelBetween(prev, curr, km);
+  const warn = getTravelLegWarning(prev, curr, km);
+
+  let line = `${Math.round(km)}km`;
+  if (Number.isFinite(fuel.cost)) {
+    line += ` ${Math.round(fuel.cost)}T`;
+  }
+  if (warn.overLimit) {
+    line = `!${line}`;
+  }
+  line = truncateChars(line, TRAVEL_LABEL_MAX_CHARS);
+
+  let title = `Gidilen Km: ${Math.round(km)} km`;
+  if (Number.isFinite(fuel.cost)) {
+    title += ` | Mazot: ${fuel.cost.toFixed(0)} TL`;
+    if (Number.isFinite(fuel.liters)) title += ` (${fuel.liters.toFixed(1)} L)`;
+  }
+  if (warn.overLimit) title += ` | UYARI: ${warn.text}`;
+
+  return { line, title };
 }
 
 function renderTravelArrows() {
@@ -1209,27 +1221,66 @@ function renderTravelArrows() {
 
       const pr = prevCell.getBoundingClientRect();
       const cr = currCell.getBoundingClientRect();
-      let x1 = pr.right - innerRect.left;
-      let x2 = cr.left - innerRect.left;
       const y = (pr.top + pr.bottom) / 2 - innerRect.top;
+      const daysGap = daysBetween(prev.date, curr.date);
+      const adjacentDay = daysGap === 1;
 
-      const minArrowWidth = 56;
-      if (x2 - x1 < minArrowWidth) {
-        const mid = (x1 + x2) / 2;
-        x1 = mid - minArrowWidth / 2;
-        x2 = mid + minArrowWidth / 2;
+      let x1 = pr.right - innerRect.left;
+      let x2;
+      if (adjacentDay) {
+        x2 = x1 + TRAVEL_INSET_PX;
+      } else {
+        x2 = cr.left - innerRect.left;
+        const minArrowWidth = 56;
+        if (x2 - x1 < minArrowWidth) {
+          const mid = (x1 + x2) / 2;
+          x1 = mid - minArrowWidth / 2;
+          x2 = mid + minArrowWidth / 2;
+        }
       }
 
       const warn = getTravelLegWarning(prev, curr, km);
+      const { line, title } = formatTravelArrowLabel(prev, curr);
       const conn = document.createElement("div");
-      conn.className = `travel-connector${warn.overLimit ? " travel-connector-warn" : ""}`;
+      conn.className = `travel-connector${warn.overLimit ? " travel-connector-warn" : ""}${adjacentDay ? " travel-connector-adjacent" : ""}`;
       conn.style.left = `${x1}px`;
-      conn.style.top = `${y - 18}px`;
+      conn.style.top = `${y - 14}px`;
       conn.style.width = `${x2 - x1}px`;
-      conn.innerHTML = `<span class="travel-arrow-line"></span><span class="travel-arrow-label">${formatTravelArrowLabel(prev, curr)}</span>`;
+
+      const arrowLine = document.createElement("span");
+      arrowLine.className = "travel-arrow-line";
+      const label = document.createElement("span");
+      label.className = "travel-arrow-label";
+      label.textContent = line;
+      label.title = title;
+      conn.appendChild(arrowLine);
+      conn.appendChild(label);
       overlay.appendChild(conn);
     }
   });
+}
+
+function truncateChars(text, maxLen) {
+  const s = String(text || "").trim();
+  if (s.length <= maxLen) return s;
+  return `${s.slice(0, Math.max(0, maxLen - 1))}…`;
+}
+
+function getTeamEventsSorted(team) {
+  return state.events
+    .filter((ev) => ev.team === team && isAssignedTeam(ev.team))
+    .sort(sortByDateThenId);
+}
+
+function getPreviousTeamEventOnGrid(team, date) {
+  const sorted = getTeamEventsSorted(team);
+  const t = SahneDates.parseIsoLocal(date).getTime();
+  let best = null;
+  sorted.forEach((ev) => {
+    const val = SahneDates.parseIsoLocal(ev.date).getTime();
+    if (val < t && (!best || val > SahneDates.parseIsoLocal(best.date).getTime())) best = ev;
+  });
+  return best;
 }
 
 function getFilteredTeams() {
@@ -1479,18 +1530,28 @@ function renderEventGrid(options = {}) {
         if (eventOnDate) {
           eventCell.rowSpan = GRID_SUB_ROWS;
 
+          const prevEv = getPreviousTeamEventOnGrid(team, eventOnDate.date);
+          if (prevEv && getTravelKmBetween(prevEv, eventOnDate)) {
+            eventCell.classList.add("has-travel-inset");
+            eventCell.style.setProperty("--travel-inset", `${TRAVEL_INSET_PX}px`);
+          }
+
           const block = document.createElement("div");
           block.className = "grid-event-block";
           makeDraggable(block, eventOnDate.id);
 
+          const fullVenue = eventOnDate.venue || "-";
           const line1 = document.createElement("div");
           line1.className = "ge-venue";
-          line1.textContent = eventOnDate.venue || "-";
+          line1.textContent = truncateChars(fullVenue, GRID_VENUE_MAX_CHARS);
+          line1.title = fullVenue;
           block.appendChild(line1);
 
+          const fullCity = getEventRouteLabel(eventOnDate);
           const line2 = document.createElement("div");
           line2.className = "ge-route";
-          line2.textContent = getEventRouteLabel(eventOnDate);
+          line2.textContent = fullCity;
+          line2.title = fullCity;
           block.appendChild(line2);
 
           eventCell.appendChild(block);
