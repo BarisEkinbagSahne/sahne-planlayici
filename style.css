@@ -525,6 +525,43 @@ td {
   flex-wrap: wrap;
 }
 
+.grid-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.grid-nav-btn {
+  min-width: 36px;
+  padding: 6px 10px;
+  font-size: 1rem;
+  line-height: 1;
+  border: 1px solid #c8d3ea;
+  border-radius: 6px;
+  background: #fff;
+  color: #243a70;
+  cursor: pointer;
+}
+
+.grid-nav-btn:hover {
+  background: #eef2fb;
+}
+
+.grid-nav-today {
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-width: auto;
+  padding: 6px 12px;
+  background: #1a4ecb;
+  color: #fff;
+  border-color: #1a4ecb;
+}
+
+.grid-nav-today:hover {
+  background: #153fa8;
+}
+
 .grid-pan-hint {
   font-size: 0.78rem;
   color: #7a8498;
@@ -678,7 +715,12 @@ td {
 .bos-pool.drag-over {
   outline: 2px solid #1a4ecb;
   outline-offset: -2px;
-  background: rgba(26, 78, 203, 0.06);
+  background: rgba(26, 78, 203, 0.12);
+  box-shadow: inset 0 0 0 1px #1a4ecb;
+}
+
+.schedule-grid tr.event-row.drop-zone.drag-over td {
+  background: rgba(26, 78, 203, 0.08) !important;
 }
 
 .schedule-grid .date-header {

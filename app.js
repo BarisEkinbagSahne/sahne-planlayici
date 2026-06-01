@@ -6,6 +6,8 @@ const GRID_SUB_ROWS = 2;
 const MAX_GRID_DAYS = 42;
 const GRID_EXPAND_DAYS = 7;
 const GRID_EDGE_THRESHOLD = 120;
+const GRID_NAV_STEP_DAYS = 7;
+const GRID_WEEK_DAYS = 7;
 const GRID_VENUE_MAX_CHARS = 20;
 const TRAVEL_LABEL_MAX_CHARS = 15;
 const BOS_POOL_MAX_VISIBLE = 8;
@@ -66,6 +68,9 @@ const els = {
   bosPool: document.getElementById("bos-pool"),
   scheduleGrid: document.getElementById("schedule-grid"),
   gridRangeLabel: document.getElementById("grid-range-label"),
+  gridNavPrev: document.getElementById("grid-nav-prev"),
+  gridNavNext: document.getElementById("grid-nav-next"),
+  gridThisWeekBtn: document.getElementById("grid-this-week-btn"),
   teamItemTemplate: document.getElementById("team-item-template"),
   revalidateBtn: document.getElementById("revalidate-btn"),
   syncStatus: document.getElementById("sync-status"),
@@ -149,6 +154,9 @@ function bindEvents() {
   els.viewGridBtn.addEventListener("click", () => setEventView("grid"));
   setupGridPanScroll();
   setupDragDropRoot();
+  els.gridNavPrev?.addEventListener("click", () => navigateGridWindow(-GRID_NAV_STEP_DAYS));
+  els.gridNavNext?.addEventListener("click", () => navigateGridWindow(GRID_NAV_STEP_DAYS));
+  els.gridThisWeekBtn?.addEventListener("click", focusGridThisWeek);
 }
 
 function setSyncStatus(message, level = "info") {
@@ -1072,13 +1080,42 @@ function updateGridRangeLabel() {
   }
 }
 
+function getWeekStartMonday(isoDate) {
+  const d = SahneDates.parseIsoLocal(isoDate || getTodayIso());
+  const dow = d.getDay();
+  const shift = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + shift);
+  return isoFromDate(d);
+}
+
+function focusGridThisWeek() {
+  const today = getTodayIso();
+  const weekStart = getWeekStartMonday(today);
+  state.gridStartDate = weekStart;
+  state.gridEndDate = addDaysToIso(weekStart, GRID_WEEK_DAYS - 1);
+  state.gridDidInitialScroll = true;
+  renderEventGrid({ skipInitialScroll: true });
+  requestAnimationFrame(() => {
+    scrollGridToDate(today);
+    renderTravelConnectors();
+  });
+}
+
+function navigateGridWindow(dayDelta) {
+  initGridRange();
+  shiftGridWindow(dayDelta);
+  renderEventGrid({ skipInitialScroll: true });
+  requestAnimationFrame(() => {
+    scrollGridToDate(state.gridStartDate);
+    renderTravelConnectors();
+  });
+}
+
 function scrollGridToDate(isoDate) {
   if (!isoDate) return;
-  const needsRecenter = !dateInGridRange(isoDate);
-  if (needsRecenter) {
+  if (!dateInGridRange(isoDate)) {
     centerGridOnDate(isoDate);
     renderEventGrid({ skipInitialScroll: true });
-    return;
   }
   requestAnimationFrame(() => {
     const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
@@ -1086,8 +1123,9 @@ function scrollGridToDate(isoDate) {
     if (!target) return;
     const wrapper = els.scheduleGrid;
     const dayWidth = measureGridDayWidth();
-    wrapper.scrollLeft = target.offsetLeft - (wrapper.clientWidth - dayWidth) / 2;
+    wrapper.scrollLeft = Math.max(0, target.offsetLeft - (wrapper.clientWidth - dayWidth) / 2);
     updateGridRangeLabel();
+    renderTravelConnectors();
   });
 }
 
@@ -1565,29 +1603,49 @@ function setupDragDropRoot() {
 function makeDraggable(el, eventId) {
   el.draggable = true;
   el.addEventListener("dragstart", (e) => {
+    if (e.target.closest("button, input, select, a")) {
+      e.preventDefault();
+      return;
+    }
     dragEventId = eventId;
     e.dataTransfer.setData("text/plain", eventId);
     e.dataTransfer.effectAllowed = "move";
     el.classList.add("dragging");
   });
+  el.querySelectorAll("button, input, select, a").forEach((ctrl) => {
+    ctrl.draggable = false;
+  });
 }
 
 function bindDropZone(el, team) {
+  if (!el || el.dataset.dropBound === "1") return;
+  el.dataset.dropBound = "1";
   el.classList.add("drop-zone");
   el.dataset.dropTeam = team || UNASSIGNED_TEAM;
-  el.addEventListener("dragover", (e) => {
+
+  const onDragOver = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
     el.classList.add("drag-over");
-  });
-  el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
-  el.addEventListener("drop", (e) => {
+  };
+  const onDragLeave = (e) => {
+    if (el.contains(e.relatedTarget)) return;
+    el.classList.remove("drag-over");
+  };
+  const onDrop = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     el.classList.remove("drag-over");
     const eventId = e.dataTransfer.getData("text/plain") || dragEventId;
     if (!eventId) return;
     assignEventFromDrop(eventId, el.dataset.dropTeam);
-  });
+  };
+
+  el.addEventListener("dragenter", onDragOver);
+  el.addEventListener("dragover", onDragOver);
+  el.addEventListener("dragleave", onDragLeave);
+  el.addEventListener("drop", onDrop);
 }
 
 function getGridAnchorDate() {
@@ -1777,6 +1835,7 @@ function renderEventGrid(options = {}) {
       travelCell.dataset.gridDate = date;
       travelCell.dataset.gridTeam = team;
       travelCell.innerHTML = "&nbsp;";
+      bindDropZone(travelCell, team);
       trTravel.appendChild(travelCell);
     });
     tbody.appendChild(trTravel);
@@ -1825,6 +1884,7 @@ function renderEventGrid(options = {}) {
 
       trEvent.appendChild(eventCell);
     });
+    bindDropZone(trEvent, team);
     tbody.appendChild(trEvent);
   });
 

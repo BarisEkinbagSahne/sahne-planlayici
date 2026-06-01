@@ -11,7 +11,7 @@
         location.replace(live + path + location.search + location.hash);
       }
     </script>
-    <link rel="stylesheet" href="style.css?v=20260602i" />
+    <link rel="stylesheet" href="style.css?v=20260602j" />
   </head>
   <body>
     <header class="app-header">
@@ -87,8 +87,13 @@
           </div>
           <div class="schedule-panel">
             <div class="grid-nav">
-              <span id="grid-range-label"></span>
-              <span class="grid-pan-hint">Yatay surukleyerek tarihlerde gezinin</span>
+              <div class="grid-nav-controls">
+                <button type="button" id="grid-nav-prev" class="ghost grid-nav-btn" title="Onceki hafta" aria-label="Onceki">&#9664;</button>
+                <button type="button" id="grid-this-week-btn" class="ghost grid-nav-btn grid-nav-today">Bu Hafta</button>
+                <button type="button" id="grid-nav-next" class="ghost grid-nav-btn" title="Sonraki hafta" aria-label="Sonraki">&#9654;</button>
+                <span id="grid-range-label"></span>
+              </div>
+              <span class="grid-pan-hint">Surukle-birak: ekibe atama (tarih degismez) · Yatay surukle: tarihler</span>
             </div>
             <div id="schedule-grid" class="schedule-grid-wrapper"></div>
           </div>
@@ -128,8 +133,8 @@
       </li>
     </template>
 
-    <script src="dates.js?v=20260602i"></script>
-    <script src="cities-coords.js?v=20260602i"></script>
-    <script src="app.js?v=20260602i"></script>
+    <script src="dates.js?v=20260602j"></script>
+    <script src="cities-coords.js?v=20260602j"></script>
+    <script src="app.js?v=20260602j"></script>
   </body>
 </html>
