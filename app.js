@@ -80,8 +80,8 @@ async function bootstrap() {
 
     if (state.events.some((e) => isAssignedTeam(e.team))) {
       recalculateTravelLegs()
-        .then(() => {
-          saveCaches();
+        .then(async () => {
+          await persistState();
           renderEventsView();
         })
         .catch(() => {});
@@ -646,7 +646,6 @@ async function recalculateAllValidations() {
   }
 
   await recalculateTravelLegs();
-
   await persistState();
   renderEventsView();
   runLiveValidation();
@@ -754,7 +753,7 @@ function getNextTeamEvent(team, date, excludeEventId) {
 
 async function getRoadDistanceKm(cityA, cityB) {
   const key = makePairKey(cityA, cityB);
-  if (state.roadCache[key]) return state.roadCache[key];
+  if (state.roadCache[key] != null) return state.roadCache[key];
   const a = await geocodeCity(cityA);
   const b = await geocodeCity(cityB);
   const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
@@ -1089,7 +1088,7 @@ async function recalculateTravelLegs() {
       const curr = teamEvents[i];
       try {
         const from = getEventEndCity(prev);
-        const to = getStartCityForCandidate(curr, curr.id);
+        const to = curr.destination;
         const km = await getRoadDistanceKm(from, to);
         const liters = (km / 100) * FUEL_LITER_PER_100KM;
         const price = toPositiveNumber(curr.fuelPricePerLiter, state.defaultFuelPrice);
@@ -1105,15 +1104,42 @@ async function recalculateTravelLegs() {
   }
 }
 
-function formatTravelArrowLabel(event) {
-  const km = event.travelKmFromPrev;
-  if (!Number.isFinite(km)) return "";
-  const cost = event.travelFuelCostFromPrev;
-  const liters = event.travelFuelLiterFromPrev;
+function getTravelKmBetween(prev, curr) {
+  if (Number.isFinite(curr.travelKmFromPrev) && curr.travelKmFromPrev > 0) {
+    return curr.travelKmFromPrev;
+  }
+  const from = getEventEndCity(prev);
+  const to = curr.destination;
+  const key = makePairKey(from, to);
+  const cached = state.roadCache[key];
+  if (Number.isFinite(cached) && cached > 0) return cached;
+  if (Number.isFinite(curr.avgKm) && curr.avgKm > 0) {
+    const start = getStartCityForCandidate(curr, curr.id);
+    if (start === from) return curr.avgKm;
+  }
+  return null;
+}
+
+function getTravelFuelBetween(prev, curr, km) {
+  if (Number.isFinite(curr.travelFuelCostFromPrev) && curr.travelFuelCostFromPrev > 0) {
+    return {
+      cost: curr.travelFuelCostFromPrev,
+      liters: curr.travelFuelLiterFromPrev,
+    };
+  }
+  const liters = (km / 100) * FUEL_LITER_PER_100KM;
+  const price = toPositiveNumber(curr.fuelPricePerLiter, state.defaultFuelPrice);
+  return { cost: liters * price, liters };
+}
+
+function formatTravelArrowLabel(prev, curr) {
+  const km = getTravelKmBetween(prev, curr);
+  if (!Number.isFinite(km) || km <= 0) return "";
+  const fuel = getTravelFuelBetween(prev, curr, km);
   let mazot = "-";
-  if (Number.isFinite(cost)) {
-    mazot = `${cost.toFixed(0)} TL`;
-    if (Number.isFinite(liters)) mazot += ` · ${liters.toFixed(1)} L`;
+  if (Number.isFinite(fuel.cost)) {
+    mazot = `${fuel.cost.toFixed(0)} TL`;
+    if (Number.isFinite(fuel.liters)) mazot += ` · ${fuel.liters.toFixed(1)} L`;
   }
   return `<span class="travel-arrow-title">Gidilen Km</span><strong>${Math.round(km)} km</strong><span class="travel-arrow-mazot">${mazot}</span>`;
 }
@@ -1135,7 +1161,8 @@ function renderTravelArrows() {
     for (let i = 1; i < teamEvents.length; i += 1) {
       const prev = teamEvents[i - 1];
       const curr = teamEvents[i];
-      if (curr.travelKmFromPrev == null) continue;
+      const km = getTravelKmBetween(prev, curr);
+      if (!Number.isFinite(km) || km <= 0) continue;
 
       const prevCell = inner.querySelector(`[data-grid-team="${team}"][data-grid-date="${prev.date}"]`);
       const currCell = inner.querySelector(`[data-grid-team="${team}"][data-grid-date="${curr.date}"]`);
@@ -1154,7 +1181,7 @@ function renderTravelArrows() {
       conn.style.left = `${x1}px`;
       conn.style.top = `${y - 16}px`;
       conn.style.width = `${x2 - x1}px`;
-      conn.innerHTML = `<span class="travel-arrow-line"></span><span class="travel-arrow-label">${formatTravelArrowLabel(curr)}</span>`;
+      conn.innerHTML = `<span class="travel-arrow-line"></span><span class="travel-arrow-label">${formatTravelArrowLabel(prev, curr)}</span>`;
       overlay.appendChild(conn);
     }
   });
