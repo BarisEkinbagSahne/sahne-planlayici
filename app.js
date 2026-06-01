@@ -8,6 +8,7 @@ const GRID_EXPAND_DAYS = 7;
 const GRID_EDGE_THRESHOLD = 120;
 const GRID_VENUE_MAX_CHARS = 20;
 const TRAVEL_LABEL_MAX_CHARS = 15;
+const BOS_POOL_MAX_VISIBLE = 8;
 
 const API_BASE = "";
 
@@ -1342,6 +1343,49 @@ function formatTravelArrowLabel(prev, curr) {
   return { line, title };
 }
 
+function ensureTravelConnectorSvg(overlay, inner) {
+  const w = inner.scrollWidth;
+  const h = inner.scrollHeight;
+  let svg = overlay.querySelector("svg.travel-connectors-svg");
+  if (!svg) {
+    const NS = "http://www.w3.org/2000/svg";
+    svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "travel-connectors-svg");
+    const defs = document.createElementNS(NS, "defs");
+    const marker = document.createElementNS(NS, "marker");
+    marker.setAttribute("id", "travel-arrow-head");
+    marker.setAttribute("markerWidth", "8");
+    marker.setAttribute("markerHeight", "8");
+    marker.setAttribute("refX", "6");
+    marker.setAttribute("refY", "4");
+    marker.setAttribute("orient", "auto");
+    const head = document.createElementNS(NS, "path");
+    head.setAttribute("d", "M0,0 L8,4 L0,8 z");
+    head.setAttribute("fill", "#2e7d32");
+    marker.appendChild(head);
+    defs.appendChild(marker);
+    const markerWarn = document.createElementNS(NS, "marker");
+    markerWarn.setAttribute("id", "travel-arrow-head-warn");
+    markerWarn.setAttribute("markerWidth", "8");
+    markerWarn.setAttribute("markerHeight", "8");
+    markerWarn.setAttribute("refX", "6");
+    markerWarn.setAttribute("refY", "4");
+    markerWarn.setAttribute("orient", "auto");
+    const headWarn = document.createElementNS(NS, "path");
+    headWarn.setAttribute("d", "M0,0 L8,4 L0,8 z");
+    headWarn.setAttribute("fill", "#e65100");
+    markerWarn.appendChild(headWarn);
+    defs.appendChild(markerWarn);
+    svg.appendChild(defs);
+    overlay.appendChild(svg);
+  }
+  svg.setAttribute("width", String(w));
+  svg.setAttribute("height", String(h));
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.querySelectorAll("path.travel-elbow-path").forEach((n) => n.remove());
+  return svg;
+}
+
 function renderTravelConnectors() {
   const inner = els.scheduleGrid.querySelector(".grid-scroll-inner");
   if (!inner) return;
@@ -1352,14 +1396,16 @@ function renderTravelConnectors() {
     overlay.className = "grid-connectors";
     inner.insertBefore(overlay, inner.firstChild);
   }
-  overlay.innerHTML = "";
+  overlay.querySelectorAll(".travel-arrow-label").forEach((n) => n.remove());
   const innerRect = inner.getBoundingClientRect();
+  const svg = ensureTravelConnectorSvg(overlay, inner);
+  const NS = "http://www.w3.org/2000/svg";
 
   getFilteredTeams().forEach((team) => {
     const travelRow = inner.querySelector(`tr.travel-row[data-grid-team="${cssEscapeAttr(team)}"]`);
     if (!travelRow) return;
     const travelRect = travelRow.getBoundingClientRect();
-    const y = (travelRect.top + travelRect.bottom) / 2 - innerRect.top;
+    const yRail = (travelRect.top + travelRect.bottom) / 2 - innerRect.top;
 
     const sorted = getTeamEventsSorted(team);
     for (let i = 1; i < sorted.length; i += 1) {
@@ -1380,25 +1426,35 @@ function renderTravelConnectors() {
       const cr = currBlock.getBoundingClientRect();
       const x1 = (pr.left + pr.right) / 2 - innerRect.left;
       const x2 = (cr.left + cr.right) / 2 - innerRect.left;
+      const yPrevTop = pr.top - innerRect.top + 2;
+      const yCurrTop = cr.top - innerRect.top + 2;
       if (x2 - x1 < 8) continue;
 
       const warn = getTravelLegWarning(prev, curr, km);
       const { line, title } = formatTravelArrowLabel(prev, curr);
-      const conn = document.createElement("div");
-      conn.className = `travel-connector${warn.overLimit ? " travel-connector-warn" : ""}`;
-      conn.style.left = `${x1}px`;
-      conn.style.top = `${y - 14}px`;
-      conn.style.width = `${x2 - x1}px`;
+      const color = warn.overLimit ? "#e65100" : "#2e7d32";
+      const markerId = warn.overLimit ? "travel-arrow-head-warn" : "travel-arrow-head";
 
-      const arrowLine = document.createElement("span");
-      arrowLine.className = "travel-arrow-line";
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("class", "travel-elbow-path");
+      path.setAttribute(
+        "d",
+        `M ${x1} ${yPrevTop} L ${x1} ${yRail} L ${x2} ${yRail} L ${x2} ${yCurrTop}`,
+      );
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", color);
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-linejoin", "round");
+      path.setAttribute("marker-end", `url(#${markerId})`);
+      svg.appendChild(path);
+
       const label = document.createElement("span");
-      label.className = "travel-arrow-label";
+      label.className = `travel-arrow-label${warn.overLimit ? " travel-label-warn" : ""}`;
       label.textContent = line;
       label.title = title;
-      conn.appendChild(arrowLine);
-      conn.appendChild(label);
-      overlay.appendChild(conn);
+      label.style.left = `${(x1 + x2) / 2}px`;
+      label.style.top = `${yRail}px`;
+      overlay.appendChild(label);
     }
   });
 }
@@ -1626,9 +1682,19 @@ function renderBosPool() {
     return;
   }
 
-  unassigned.forEach((event) => {
+  const shown = unassigned.slice(0, BOS_POOL_MAX_VISIBLE);
+  const hiddenCount = unassigned.length - shown.length;
+
+  shown.forEach((event) => {
     els.bosPool.appendChild(createEventCard(event));
   });
+
+  if (hiddenCount > 0) {
+    const more = document.createElement("p");
+    more.className = "bos-more-hint";
+    more.textContent = `+${hiddenCount} is daha (Gorunum 1 tablosunda tumunu gorebilirsiniz)`;
+    els.bosPool.appendChild(more);
+  }
 }
 
 function renderEventGrid(options = {}) {

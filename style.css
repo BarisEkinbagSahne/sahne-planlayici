@@ -484,10 +484,32 @@ td {
 .bos-pool {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   min-height: 56px;
-  align-items: flex-start;
+  max-height: 200px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: stretch;
+  padding-bottom: 4px;
+}
+
+.bos-pool .event-card {
+  flex: 0 0 200px;
+  max-width: 200px;
+}
+
+.bos-more-hint {
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5a6478;
+  background: #eef2fb;
+  border-radius: 8px;
+  border: 1px dashed #b8c4dc;
 }
 
 .schedule-panel {
@@ -544,36 +566,16 @@ td {
   overflow: visible;
 }
 
-.travel-connector {
+.travel-connectors-svg {
   position: absolute;
-  height: 28px;
-  pointer-events: none;
-}
-
-.travel-arrow-line {
-  position: absolute;
+  top: 0;
   left: 0;
-  right: 0;
-  top: 50%;
-  height: 2px;
-  background: #2e7d32;
-  transform: translateY(-50%);
-}
-
-.travel-arrow-line::after {
-  content: "";
-  position: absolute;
-  right: -1px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: 5px solid transparent;
-  border-left: 7px solid #2e7d32;
+  pointer-events: none;
+  overflow: visible;
 }
 
 .travel-arrow-label {
   position: absolute;
-  left: 50%;
-  top: 50%;
   transform: translate(-50%, -50%);
   background: #fff;
   border: 1px solid #2e7d32;
@@ -589,18 +591,10 @@ td {
   box-shadow: 0 1px 4px rgba(46, 125, 50, 0.2);
 }
 
-.travel-connector-warn .travel-arrow-line {
-  background: #e65100;
-}
-
-.travel-connector-warn .travel-arrow-line::after {
-  border-left-color: #e65100;
-}
-
-.travel-connector-warn .travel-arrow-label {
-  border-color: #e65100;
-  background: #fff8f0;
-  color: #bf360c;
+.travel-label-warn {
+  border-color: #e65100 !important;
+  background: #fff8f0 !important;
+  color: #bf360c !important;
 }
 
 .schedule-grid .cell-travel {
