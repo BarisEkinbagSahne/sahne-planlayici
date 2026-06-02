@@ -11,7 +11,7 @@
         location.replace(live + path + location.search + location.hash);
       }
     </script>
-    <link rel="stylesheet" href="style.css?v=20260602m" />
+    <link rel="stylesheet" href="style.css?v=20260602n" />
   </head>
   <body>
     <header class="app-header">
@@ -20,7 +20,15 @@
         <p>Karayolu mesafesi ve 800 km/gun kuralina gore ekip planlama</p>
         <p id="sync-status" class="sync-status sync-info">Baglaniyor...</p>
       </div>
-      <button id="settings-toggle-btn" class="icon-btn" type="button" aria-label="Ayarlar">☰</button>
+      <div class="header-actions">
+        <div class="view-toggle" role="group" aria-label="Gorunum secimi">
+          <button id="view-table-btn" class="ghost view-btn" type="button" data-view="table">Gorunum 1</button>
+          <button id="view-grid-btn" class="ghost view-btn active" type="button" data-view="grid">Gorunum 2</button>
+        </div>
+        <a href="bubilet.html" class="ghost btn-link">Bubilet</a>
+        <button id="revalidate-btn" class="ghost" type="button">Tum verilerde Km tekrar hesapla</button>
+        <button id="settings-toggle-btn" class="icon-btn" type="button" aria-label="Ayarlar">☰</button>
+      </div>
     </header>
 
     <aside id="settings-panel" class="settings-panel hidden">
@@ -44,41 +52,11 @@
 
     <main class="layout">
       <section class="card card-wide">
-        <h2>Etkinlik Ekle</h2>
-        <form id="event-form" class="event-form-row">
-          <label>
-            Tarih (GG.AA.YYYY)
-            <input id="event-date" type="text" inputmode="numeric" placeholder="01.06.2026" required />
-          </label>
-          <p class="form-hint">Yeni isler otomatik olarak <strong>Boş</strong> alanina eklenir; ekiplere surukleyerek atayin.</p>
-          <label>
-            Mekan
-            <input id="event-venue" type="text" placeholder="Orn: Ataturk Kultur Merkezi" required />
-          </label>
-          <label>
-            Il
-            <input id="event-destination" type="text" list="cities-list" placeholder="Orn: Izmir" required />
-          </label>
-          <button type="button" id="event-return-btn" class="ghost hidden">Izmir Donus: Hayir</button>
-          <button type="submit" id="submit-btn">Kaydet</button>
-        </form>
-        <div id="validation-box" class="validation info">Canli kontrol icin veri girin.</div>
-      </section>
-
-      <section class="card card-wide">
         <div class="table-header">
           <h2>Etkinlikler</h2>
-          <div class="table-actions">
-            <div class="view-toggle" role="group" aria-label="Gorunum secimi">
-              <button id="view-table-btn" class="ghost view-btn" type="button" data-view="table">Gorunum 1</button>
-              <button id="view-grid-btn" class="ghost view-btn active" type="button" data-view="grid">Gorunum 2</button>
-            </div>
-            <a href="bubilet.html" class="ghost btn-link">Bubilet</a>
-            <button id="revalidate-btn" class="ghost" type="button">Tum verilerde Km tekrar hesapla</button>
-          </div>
         </div>
         <div id="event-grid-view" class="event-grid-layout">
-          <div class="bos-bar">
+          <div id="bos-bar" class="bos-bar">
             <div class="bos-bar-head">
               <h3>Boş</h3>
               <p class="bos-hint">Atanmamis yeni isler. Ekip dugmesine tiklayin veya asagidaki tabloya surukleyin.</p>
@@ -133,8 +111,8 @@
       </li>
     </template>
 
-    <script src="dates.js?v=20260602m"></script>
-    <script src="cities-coords.js?v=20260602m"></script>
-    <script src="app.js?v=20260602m"></script>
+    <script src="dates.js?v=20260602n"></script>
+    <script src="cities-coords.js?v=20260602n"></script>
+    <script src="app.js?v=20260602n"></script>
   </body>
 </html>

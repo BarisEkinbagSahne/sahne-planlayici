@@ -33,9 +33,29 @@ const els = {
   missingTbody: document.getElementById("missing-tbody"),
   missingCount: document.getElementById("missing-count"),
   syncStatus: document.getElementById("sync-status"),
+  manualForm: document.getElementById("manual-event-form"),
+  manualDate: document.getElementById("manual-event-date"),
+  manualVenue: document.getElementById("manual-event-venue"),
+  manualDestination: document.getElementById("manual-event-destination"),
+  manualReturnBtn: document.getElementById("manual-event-return-btn"),
+  manualValidation: document.getElementById("manual-validation-box"),
+  citiesList: document.getElementById("cities-list"),
 };
 
 let missingEvents = [];
+let manualReturnToIzmir = false;
+let storeSnapshot = null;
+
+const TURKIYE_SEHIRLERI = [
+  "Adana", "Adiyaman", "Afyonkarahisar", "Agri", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydin",
+  "Balikesir", "Bartin", "Batman", "Bayburt", "Bilecik", "Bingol", "Bitlis", "Bolu", "Burdur", "Bursa", "Canakkale", "Cankiri",
+  "Corum", "Denizli", "Diyarbakir", "Duzce", "Edirne", "Elazig", "Erzincan", "Erzurum", "Eskisehir", "Gaziantep", "Giresun",
+  "Gumushane", "Hakkari", "Hatay", "Igdir", "Isparta", "Istanbul", "Izmir", "Kahramanmaras", "Karabuk", "Karaman", "Kars",
+  "Kastamonu", "Kayseri", "Kilis", "Kirikkale", "Kirklareli", "Kirsehir", "Kocaeli", "Konya", "Kutahya", "Malatya", "Manisa",
+  "Mardin", "Mersin", "Mugla", "Mus", "Nevsehir", "Nigde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Sanliurfa", "Siirt",
+  "Sinop", "Sivas", "Sirnak", "Tekirdag", "Tokat", "Trabzon", "Tunceli", "Usak", "Van", "Yalova", "Yozgat", "Zonguldak",
+];
+const citySet = new Set(TURKIYE_SEHIRLERI.map((x) => x.toLowerCase()));
 
 async function apiRequest(path, options = {}) {
   try {
@@ -100,12 +120,115 @@ function escapeHtml(value) {
 async function loadSavedUrl() {
   try {
     const data = await apiRequest("/api/data");
+    storeSnapshot = data;
     els.urlInput.value = data.settings?.bubiletUrl || DEFAULT_BUBILET_URL;
     setSyncStatus("Sunucu ile baglandi", "ok");
   } catch (err) {
     els.urlInput.value = DEFAULT_BUBILET_URL;
     setSyncStatus(`Sunucu hatasi: ${err.message}`, "error");
   }
+}
+
+function normalizeText(v) {
+  return String(v || "").trim().replace(/\s+/g, " ");
+}
+
+function normalizeCityName(v) {
+  return normalizeText(v);
+}
+
+function setManualValidation(message, level = "info") {
+  if (!els.manualValidation) return;
+  els.manualValidation.className = `validation ${level}`;
+  els.manualValidation.textContent = message;
+}
+
+function updateManualReturnButton() {
+  if (!els.manualReturnBtn) return;
+  els.manualReturnBtn.textContent = `Izmir Donus: ${manualReturnToIzmir ? "Evet" : "Hayir"}`;
+}
+
+function fillCitiesDatalist() {
+  if (!els.citiesList) return;
+  els.citiesList.innerHTML = "";
+  TURKIYE_SEHIRLERI.forEach((city) => {
+    const option = document.createElement("option");
+    option.value = city;
+    els.citiesList.appendChild(option);
+  });
+}
+
+function validateManualPayload(payload) {
+  if (!payload.date || !payload.venue || !payload.destination) {
+    return { ok: false, message: "Tum alanlar zorunlu." };
+  }
+  if (!citySet.has(payload.destination.toLowerCase())) {
+    return { ok: false, message: "Il listeden secilmeli." };
+  }
+  return { ok: true };
+}
+
+async function onSaveManualEvent(e) {
+  e.preventDefault();
+  const payload = {
+    date: SahneDates.displayToIso(els.manualDate?.value || ""),
+    venue: normalizeText(els.manualVenue?.value || ""),
+    destination: normalizeCityName(els.manualDestination?.value || ""),
+    returnToIzmir: manualReturnToIzmir,
+  };
+  const valid = validateManualPayload(payload);
+  if (!valid.ok) {
+    setManualValidation(valid.message, "warn");
+    return;
+  }
+
+  try {
+    const data = storeSnapshot || (await apiRequest("/api/data"));
+    const next = {
+      teams: Array.isArray(data.teams) ? data.teams : [],
+      events: Array.isArray(data.events) ? data.events.slice() : [],
+      geoCache: data.geoCache || {},
+      roadCache: data.roadCache || {},
+      settings: data.settings || {},
+    };
+    next.events.push({
+      id: crypto.randomUUID(),
+      team: DEFAULT_TEAM_LABEL,
+      date: payload.date,
+      destination: payload.destination,
+      venue: payload.venue,
+      returnToIzmir: payload.returnToIzmir,
+      fuelPricePerLiter: Number(next.settings.defaultFuelPrice || 70),
+      startCity: "Izmir",
+      avgKm: null,
+      validation: null,
+      fuelLiterUsed: null,
+      fuelCost: null,
+      adviceText: "",
+    });
+
+    await apiRequest("/api/data", { method: "PUT", body: JSON.stringify(next) });
+    storeSnapshot = next;
+    setManualValidation("Etkinlik eklendi. Ana sayfada Bos alanina dusur.", "ok");
+    setSyncStatus("Manuel etkinlik eklendi", "ok");
+    els.manualForm?.reset();
+    manualReturnToIzmir = false;
+    updateManualReturnButton();
+  } catch (err) {
+    setManualValidation(`Kayit basarisiz: ${err.message}`, "error");
+    setSyncStatus(`Hata: ${err.message}`, "error");
+  }
+}
+
+function bindManualForm() {
+  if (!els.manualForm) return;
+  updateManualReturnButton();
+  fillCitiesDatalist();
+  els.manualReturnBtn?.addEventListener("click", () => {
+    manualReturnToIzmir = !manualReturnToIzmir;
+    updateManualReturnButton();
+  });
+  els.manualForm.addEventListener("submit", onSaveManualEvent);
 }
 
 async function onCheck() {
@@ -174,4 +297,5 @@ async function onAddMissing() {
 
 els.checkBtn.addEventListener("click", onCheck);
 els.addBtn.addEventListener("click", onAddMissing);
+bindManualForm();
 loadSavedUrl();

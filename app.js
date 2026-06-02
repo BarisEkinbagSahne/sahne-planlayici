@@ -78,6 +78,7 @@ const els = {
   syncStatus: document.getElementById("sync-status"),
   citiesList: document.getElementById("cities-list"),
   tableTeamFilters: document.getElementById("table-team-filters"),
+  bosBar: document.getElementById("bos-bar"),
 };
 
 async function bootstrap() {
@@ -146,10 +147,12 @@ function bindEvents() {
   els.settingsToggleBtn.addEventListener("click", () => els.settingsPanel.classList.remove("hidden"));
   els.settingsCloseBtn.addEventListener("click", () => els.settingsPanel.classList.add("hidden"));
   els.teamForm.addEventListener("submit", onAddTeam);
-  els.eventForm.addEventListener("submit", onSaveEvent);
-  els.eventDate.addEventListener("input", runLiveValidation);
-  els.eventDestination.addEventListener("input", debounce(runLiveValidation, 250));
-  els.eventVenue.addEventListener("input", debounce(runLiveValidation, 250));
+  if (els.eventForm) {
+    els.eventForm.addEventListener("submit", onSaveEvent);
+    els.eventDate?.addEventListener("input", runLiveValidation);
+    els.eventDestination?.addEventListener("input", debounce(runLiveValidation, 250));
+    els.eventVenue?.addEventListener("input", debounce(runLiveValidation, 250));
+  }
   els.defaultFuelPriceInput.addEventListener("change", onDefaultFuelPriceChange);
   els.revalidateBtn.addEventListener("click", revalidateAllRows);
   els.viewTableBtn.addEventListener("click", () => setEventView("table"));
@@ -279,6 +282,7 @@ function renderTeams() {
 }
 
 function renderTeamFilters() {
+  if (!els.tableTeamFilters) return;
   if (!state.teamFilter) state.teamFilter = "ALL";
   if (state.teamFilter !== "ALL" && !state.teams.includes(state.teamFilter)) state.teamFilter = "ALL";
   els.tableTeamFilters.innerHTML = "";
@@ -347,6 +351,7 @@ function deleteTeam(team) {
 }
 
 function getFormPayload() {
+  if (!els.eventDate || !els.eventDestination || !els.eventVenue) return null;
   const date = SahneDates.displayToIso(els.eventDate.value);
   const destination = normalizeCityName(els.eventDestination.value);
   const venue = normalizeText(els.eventVenue.value);
@@ -402,7 +407,7 @@ async function onSaveEvent(e) {
   });
   saveEvents();
   renderEventsView();
-  els.eventForm.reset();
+  if (els.eventForm) els.eventForm.reset();
   state.returnToIzmirDraft = false;
   updateDraftReturnButton();
   runLiveValidation();
@@ -591,6 +596,7 @@ function deleteEvent(eventId) {
 }
 
 async function runLiveValidation() {
+  if (!els.validationBox || !els.eventDate || !els.eventDestination || !els.eventVenue) return;
   const payload = getFormPayload();
   if (!payload) {
     setValidationBox("Canli kontrol icin tum alanlari doldurun.", "info");
@@ -633,6 +639,7 @@ function onDefaultFuelPriceChange() {
 }
 
 function setValidationBox(message, level) {
+  if (!els.validationBox) return;
   els.validationBox.className = `validation ${level}`;
   els.validationBox.textContent = message;
 }
@@ -1782,6 +1789,7 @@ function createEventCard(event) {
 }
 
 function renderBosPool() {
+  if (!els.bosPool) return;
   els.bosPool.innerHTML = "";
   bindDropZone(els.bosPool, UNASSIGNED_TEAM);
 
@@ -1790,12 +1798,10 @@ function renderBosPool() {
     .sort(sortByDateThenId);
 
   if (!unassigned.length) {
-    const empty = document.createElement("p");
-    empty.className = "bos-hint";
-    empty.textContent = "Bos is yok.";
-    els.bosPool.appendChild(empty);
+    els.bosBar?.classList.add("hidden");
     return;
   }
+  els.bosBar?.classList.remove("hidden");
 
   const shown = unassigned.slice(0, BOS_POOL_MAX_VISIBLE);
   const hiddenCount = unassigned.length - shown.length;

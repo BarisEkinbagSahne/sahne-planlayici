@@ -30,6 +30,40 @@ body {
   opacity: 0.95;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.app-header .view-toggle {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.app-header .view-btn {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.app-header .view-btn.active {
+  background: #fff;
+  color: #1a4ecb;
+}
+
+.app-header .btn-link,
+.app-header #revalidate-btn {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.app-header .btn-link:hover,
+.app-header #revalidate-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
 .layout {
   display: grid;
   gap: 14px;
@@ -363,6 +397,13 @@ td {
 @media (max-width: 720px) {
   .event-form-row {
     grid-template-columns: repeat(1, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 
