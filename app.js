@@ -1341,10 +1341,6 @@ function getTravelKmBetween(prev, curr) {
   const to = curr.destination;
   const cached = estimateRoadKmSync(from, to);
   if (Number.isFinite(cached) && cached > 0) return cached;
-  if (Number.isFinite(curr.avgKm) && curr.avgKm > 0) {
-    const start = getStartCityForCandidate(curr, curr.id);
-    if (resolveCityDisplayName(start) === resolveCityDisplayName(from)) return curr.avgKm;
-  }
   return null;
 }
 
