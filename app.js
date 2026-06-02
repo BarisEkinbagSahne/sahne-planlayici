@@ -37,7 +37,7 @@ const state = {
   roadCache: {},
   returnToIzmirDraft: false,
   teamFilter: "ALL",
-  eventView: "grid",
+  eventView: "table",
   gridStartDate: null,
   gridEndDate: null,
   gridDidInitialScroll: false,
@@ -108,6 +108,18 @@ async function bootstrap() {
           renderEventsView();
         }
         setSyncStatus("Sunucu ile senkron (tahmini km)", "warn");
+      }
+    }
+
+    const hasIncompleteRows = state.events.some((e) =>
+      !e.validation || !Number.isFinite(e.avgKm) || !Number.isFinite(e.fuelCost)
+    );
+    if (hasIncompleteRows) {
+      setSyncStatus("Eksik satirlar hesaplanıyor...", "info");
+      try {
+        await recalculateAllValidations();
+      } catch (err) {
+        console.error(err);
       }
     }
 
@@ -258,8 +270,8 @@ function renderEventsView() {
   const isGrid = state.eventView === "grid";
   els.eventGridView.classList.toggle("hidden", !isGrid);
   els.eventTableView.classList.toggle("hidden", isGrid);
-  els.viewTableBtn.classList.toggle("active", !isGrid);
-  els.viewGridBtn.classList.toggle("active", isGrid);
+  els.viewTableBtn?.classList.toggle("active", !isGrid);
+  els.viewGridBtn?.classList.toggle("active", isGrid);
   if (isGrid) {
     renderEventGrid();
   } else {
@@ -733,6 +745,15 @@ function hasSameDayConflict(candidate, excludeEventId) {
     if (normalizeTeamName(ev.team) !== normalizeTeamName(candidate.team)) return false;
     return isSameDay(ev.date, candidate.date);
   });
+}
+
+function findSameDayConflictEvent(candidate, excludeEventId) {
+  if (isUnassignedTeam(candidate.team)) return null;
+  return state.events.find((ev) => {
+    if (ev.id === excludeEventId) return false;
+    if (normalizeTeamName(ev.team) !== normalizeTeamName(candidate.team)) return false;
+    return isSameDay(ev.date, candidate.date);
+  }) || null;
 }
 
 async function getReturnAdviceText(item) {
@@ -1718,9 +1739,10 @@ async function assignEventFromDrop(eventId, teamRaw) {
 
   if (isAssignedTeam(team)) {
     const candidate = { ...item, team };
-    if (hasSameDayConflict(candidate, eventId)) {
-      alert("Ayni ekip ayni tarihte birden fazla is alamaz.");
-      return;
+    const conflict = findSameDayConflictEvent(candidate, eventId);
+    if (conflict) {
+      conflict.team = UNASSIGNED_TEAM;
+      setSyncStatus("Ayni gun cakisan eski atama Bos alanina alindi.", "warn");
     }
   }
 

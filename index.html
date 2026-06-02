@@ -11,7 +11,7 @@
         location.replace(live + path + location.search + location.hash);
       }
     </script>
-    <link rel="stylesheet" href="style.css?v=20260602n" />
+    <link rel="stylesheet" href="style.css?v=20260602o" />
   </head>
   <body>
     <header class="app-header">
@@ -21,10 +21,8 @@
         <p id="sync-status" class="sync-status sync-info">Baglaniyor...</p>
       </div>
       <div class="header-actions">
-        <div class="view-toggle" role="group" aria-label="Gorunum secimi">
-          <button id="view-table-btn" class="ghost view-btn" type="button" data-view="table">Gorunum 1</button>
-          <button id="view-grid-btn" class="ghost view-btn active" type="button" data-view="grid">Gorunum 2</button>
-        </div>
+        <button id="view-table-btn" class="hidden" type="button" data-view="table" aria-hidden="true">Gorunum 1</button>
+        <button id="view-grid-btn" class="hidden" type="button" data-view="grid" aria-hidden="true">Gorunum 2</button>
         <a href="bubilet.html" class="ghost btn-link">Bubilet</a>
         <button id="revalidate-btn" class="ghost" type="button">Tum verilerde Km tekrar hesapla</button>
         <button id="settings-toggle-btn" class="icon-btn" type="button" aria-label="Ayarlar">☰</button>
@@ -111,8 +109,8 @@
       </li>
     </template>
 
-    <script src="dates.js?v=20260602n"></script>
-    <script src="cities-coords.js?v=20260602n"></script>
-    <script src="app.js?v=20260602n"></script>
+    <script src="dates.js?v=20260602o"></script>
+    <script src="cities-coords.js?v=20260602o"></script>
+    <script src="app.js?v=20260602o"></script>
   </body>
 </html>
