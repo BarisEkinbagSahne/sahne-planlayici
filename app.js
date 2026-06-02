@@ -37,7 +37,7 @@ const state = {
   roadCache: {},
   returnToIzmirDraft: false,
   teamFilter: "ALL",
-  eventView: "table",
+  eventView: "grid",
   gridStartDate: null,
   gridEndDate: null,
   gridDidInitialScroll: false,
